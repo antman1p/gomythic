@@ -237,6 +237,9 @@ func (m *Mythic) LoadMythicSchema() bool {
 }
 
 func Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
+	//DEBUG
+	log.printf("LoginFunciton Entry Point")
+	
 	mythic := NewMythic(username, password, serverIP, serverPort, apiToken, ssl, timeout)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	if apiToken == "" {
@@ -252,6 +255,11 @@ func Login(serverIP string, serverPort int, username, password, apiToken string,
 			log.Printf("[-] Failed to authenticate to Mythic: \n%s", err)
 			return nil, err
 		}
+		
+		// DEBUG
+		log.Printf("Response from server: %v\n", response)
+		
+		
 		mythic.AccessToken = response["access_token"].(string)
 		mythic.RefreshToken = response["refresh_token"].(string)
 		user := response["user"].(map[string]interface{})

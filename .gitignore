@@ -1,5 +1,4 @@
 node_modules/
-main.go
 .DS_Store
 .env
 .gclient_done
@@ -26,6 +25,7 @@ SHASUMS256.txt
 **/package-lock.json
 compile_commands.json
 .envrc
+go.mod
 
 # npm package
 /npm/dist
