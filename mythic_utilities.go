@@ -1,4 +1,4 @@
-package mythic_go
+package Mythic_Go_Scripting
 
 import (
 	"bytes"
