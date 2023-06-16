@@ -19,10 +19,10 @@ import (
 )
 
 type MythicUtilities struct {
-	Mythic *MythicClasses
+	Mythic *Mythic
 }
 
-func NewMythicUtilities(mythic *MythicClasses) *MythicUtilities {
+func NewMythicUtilities(mythic *Mythic) *MythicUtilities {
 	return &MythicUtilities{
 		Mythic: mythic,
 	}
@@ -51,6 +51,7 @@ func (u *MythicUtilities) GetWSTransport() *websocket.Dialer {
 	return dialer
 }
 
+// HTTPPost performs a POST request to the specified URL and returns the response
 func (u *MythicUtilities) HTTPPost(data map[string]interface{}, url string) (map[string]interface{}, error) {
 	client := &http.Client{
 		Transport: u.GetHTTPTransport(),
@@ -87,6 +88,7 @@ func (u *MythicUtilities) HTTPPost(data map[string]interface{}, url string) (map
 
 	return response, nil
 }
+
 
 func (u *MythicUtilities) HTTPPostForm(data url.Values, url string) (map[string]interface{}, error) {
 	client := &http.Client{
@@ -241,6 +243,8 @@ func (u *MythicUtilities) GraphQLPost(query string, variables map[string]interfa
 
 	return response, nil
 }
+
+
 
 func (u *MythicUtilities) GraphQLSubscription(query string, variables map[string]interface{}, timeout int) (<-chan map[string]interface{}, error) {
 	data := map[string]interface{}{

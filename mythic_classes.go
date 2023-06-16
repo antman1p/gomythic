@@ -2,7 +2,7 @@ package Mythic_Go_Scripting
 
 import "encoding/json"
 
-type MythicClasses struct {
+type Mythic struct {
 	Username           string `json:"username"`
 	Password           string `json:"password"`
 	APIToken           string `json:"apitoken"`
@@ -19,7 +19,7 @@ type MythicClasses struct {
 	Schema             string `json:"schema"`
 }
 
-func (m *MythicClasses) String() string {
+func (m *Mythic) String() string {
 	data, _ := json.MarshalIndent(m, "", "    ")
 	return string(data)
 }
