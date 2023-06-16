@@ -19,12 +19,13 @@ import (
 
 
 func NewMythic(username, password, serverIP string, serverPort int, apiToken string, ssl bool, timeout int) *Mythic {
-	protocol := "http://"
+	protocol := "http"
 	if ssl {
-		protocol = "https://"
+		protocol = "https"
 	}
+	log.Printf("[*] Protocol: %s", protocol) // Add this print statement DEBUG
 
-	return &Mythic{
+	mythic := &Mythic{
 		Username:         username,
 		Password:         password,
 		APIToken:         apiToken,
@@ -32,11 +33,15 @@ func NewMythic(username, password, serverIP string, serverPort int, apiToken str
 		ServerPort:       serverPort,
 		SSL:              ssl,
 		HTTP:             protocol,
-		WS:               "ws://",
+		WS:               "ws",
 		GlobalTimeout:    timeout,
 		ScriptingVersion: "0.1.4",
 	}
+	log.Printf("[*] New Mythic object: %+v", mythic) // Add this print statement DEBUG
+	return mythic
 }
+
+
 
 func (m *Mythic) GraphqlPost(query string, variables map[string]interface{}) (map[string]interface{}, error) {
 	data := map[string]interface{}{
@@ -335,22 +340,23 @@ func (m *Mythic) LoadMythicSchema() bool {
 	return true
 }
 
-func (mythic *Mythic) Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) error {
+func Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
+	mythic := &Mythic{}
 	mythic.SetMythicDetails(serverIP, serverPort, username, password, apiToken, ssl, timeout)
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	if apiToken == "" {
 		if err := mythic.AuthenticateToMythic(); err != nil {
-			return err
+			return nil, err
 		}
 
 		if err := mythic.HandleAPITokens(); err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		mythic.APIToken = apiToken
 	}
-	return nil
+	return mythic, nil
 }
 
 func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout int) {
@@ -364,7 +370,8 @@ func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username
 }
 
 func (mythic *Mythic) AuthenticateToMythic() error {
-	url := fmt.Sprintf("%s%s:%d/auth", mythic.HTTP, mythic.ServerIP, mythic.ServerPort)
+	url := fmt.Sprintf("%s://%s:%d/auth", mythic.HTTP, mythic.ServerIP, mythic.ServerPort)
+	log.Printf("[*] URL: %s\n", url) // Add this line
 	data := map[string]interface{}{
 		"username":          mythic.Username,
 		"password":          mythic.Password,
