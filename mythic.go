@@ -23,9 +23,8 @@ func NewMythic(username, password, serverIP string, serverPort int, apiToken str
 	if ssl {
 		protocol = "https"
 	}
-	log.Printf("[*] Protocol: %s", protocol) // Add this print statement DEBUG
 
-	mythic := &Mythic{
+	return &Mythic{
 		Username:         username,
 		Password:         password,
 		APIToken:         apiToken,
@@ -37,18 +36,18 @@ func NewMythic(username, password, serverIP string, serverPort int, apiToken str
 		GlobalTimeout:    timeout,
 		ScriptingVersion: "0.1.4",
 	}
-	log.Printf("[*] New Mythic object: %+v", mythic) // Add this print statement DEBUG
-	return mythic
 }
 
 
 
-func (m *Mythic) GraphqlPost(query string, variables map[string]interface{}) (map[string]interface{}, error) {
-	data := map[string]interface{}{
-		"query":     query,
-		"variables": variables,
-	}
 
+func (m *Mythic) GraphqlPost(query string, variables map[string]interface{}) (map[string]interface{}, error) {
+    data := make(map[string]interface{})
+    data["query"] = query
+    if variables != nil && len(variables) > 0 {
+        data["variables"] = variables
+    }
+	
 	response, err := m.HttpPost(m.HTTP+m.ServerIP+":"+strconv.Itoa(m.ServerPort)+"/graphql", data)
 	if err != nil {
 		return nil, err
