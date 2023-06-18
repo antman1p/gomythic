@@ -39,9 +39,6 @@ func NewMythic(username, password, serverIP string, serverPort int, apiToken str
 	}
 }
 
-
-
-
 func (m *Mythic) GetHTTPTransport() http.RoundTripper {
 	return roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		// Set custom headers here
@@ -399,11 +396,16 @@ func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username
 		mythic.HTTP = "http"
 	}
 	
-	// Add the logging line DEBUG
-    log.Printf("[*] Mythic HTTP set as: %s\n", mythic.HTTP)
-
 	mythic.Schema = "https"
+	
+	// Set the scripting version here
+	mythic.ScriptingVersion = "0.1.4"
+	
+	// Add the logging line DEBUG
+	log.Printf("[*] Mythic HTTP set as: %s\n", mythic.HTTP)
+	log.Printf("[*] Mythic scripting version set as: %s\n", mythic.ScriptingVersion)
 }
+
 
 func (mythic *Mythic) AuthenticateToMythic() error {
 	// Add the logging line DEBUG
@@ -416,7 +418,7 @@ func (mythic *Mythic) AuthenticateToMythic() error {
 		"password":          mythic.Password,
 		"scripting_version": mythic.ScriptingVersion,
 	}
-	log.Printf("[*] Logging into Mythic as scripting_version %s", mythic.ScriptingVersion)
+	log.Printf("[*] Logging into Mythic as scripting_version: %s", mythic.ScriptingVersion)
 	response, err := mythic.HttpPost(url, data)
 	if err != nil {
 		log.Printf("[-] Failed to authenticate to Mythic: \n%s", err)
