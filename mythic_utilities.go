@@ -75,6 +75,13 @@ func (m *Mythic) GraphqlPost(query string, variables map[string]interface{}) (in
 	// Prepare the request
 	req := graphql.NewRequest(query)
 	
+	// Set the headers
+	req.Header = m.GetHeaders()
+	
+	//DEBUG
+	log.Printf("Headers: %v\n", req.Header)
+
+	
 	//DEBUG:
 	log.Printf("Request: %s\n", req)
 
@@ -172,7 +179,7 @@ func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]i
 func (m *Mythic) GetHeaders() http.Header {
 	headers := http.Header{}
 	if m.APIToken != "" {
-		headers.Set("Authorization", "Bearer "+m.APIToken)
+		headers.Set("apitoken", m.APIToken)
 	} else if m.AccessToken != ""{
 		headers.Set("Authorization", "Bearer "+m.AccessToken)
 	}
