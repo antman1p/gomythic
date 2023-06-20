@@ -61,13 +61,7 @@ func (m *Mythic) GetHTTPTransport() http.RoundTripper {
 func (m *Mythic) GraphqlPost(query string, variables map[string]interface{}) (interface{}, error) {
 	// Set up GraphQL client
 	url := fmt.Sprintf("%s://%s:%d/graphql/", m.HTTP, m.ServerIP, m.ServerPort)
-	
-	// DEBUG
-	log.Printf("URL: %s\n", url)
-	log.Printf("Query: %s\n", query)
-	log.Printf("Variables: %v\n", variables)
 
-	
 	client := graphql.NewClient(url, graphql.WithHTTPClient(&http.Client{
 		Transport: m.GetHTTPTransport(),
 	}))
@@ -77,13 +71,6 @@ func (m *Mythic) GraphqlPost(query string, variables map[string]interface{}) (in
 	
 	// Set the headers
 	req.Header = m.GetHeaders()
-	
-	//DEBUG
-	log.Printf("Headers: %v\n", req.Header)
-
-	
-	//DEBUG:
-	log.Printf("Request: %s\n", req)
 
 	// Set variables if any
 	if variables != nil {
@@ -147,8 +134,7 @@ func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]i
     req.Header = m.GetHeaders()
     req.Header.Set("Content-Type", "application/json")
 	
-	//DEBUG
-	log.Printf("Headers: %s", req.Header)
+
 
     resp, err := client.Do(req)
     if err != nil {
@@ -170,7 +156,6 @@ func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]i
         return nil, err
     }
 	
-	log.Printf("Unmarshalled response: %v\n", response)  // log the unmarshalled response DEBUG
 
     return response, nil
 }
@@ -408,16 +393,10 @@ func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username
 	// Set the scripting version here
 	mythic.ScriptingVersion = "0.1.4"
 	
-	// Add the logging line DEBUG
-	log.Printf("[*] Mythic HTTP set as: %s\n", mythic.HTTP)
-	log.Printf("[*] Mythic scripting version set as: %s\n", mythic.ScriptingVersion)
 }
 
 
 func (mythic *Mythic) AuthenticateToMythic() error {
-	// Add the logging line DEBUG
-    log.Printf("[*] HTTP in AuthenticateToMythic: %s\n", mythic.HTTP)
-	
     url := fmt.Sprintf("%s://%s:%d/auth", mythic.HTTP, mythic.ServerIP, mythic.ServerPort)  
 	log.Printf("[*] URL: %s\n", url) // Add this line
 	data := map[string]interface{}{
@@ -449,9 +428,6 @@ func (mythic *Mythic) HandleAPITokens() error {
 	
 	// Handle data as a generic interface{} first, then check and convert to map or array
 	currentTokens, err := mythic.GraphqlPost(GetAPITokensQuery, map[string]interface{}{})
-		
-	//DEBUG
-	log.Printf("Received response from GraphqlPost: %v\n", currentTokens)  // log the received data
 
 	// Check if error is nil
 	if err != nil {
@@ -463,9 +439,6 @@ func (mythic *Mythic) HandleAPITokens() error {
 		log.Printf("GraphqlPost returned nil response")
 		return fmt.Errorf("GraphqlPost returned nil response")
 	}
-	
-	//DEBUG
-	log.Printf("response: %v", currentTokens)
 	
 	// Try to convert response to a map
 	responseMap, ok := currentTokens.(map[string]interface{})
