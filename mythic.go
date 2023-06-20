@@ -259,12 +259,12 @@ func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackD
 
     if createTask["status"] == "success" {
         if waitForComplete {
-            taskDisplayID, ok := createTask["display_id"].(int)
-            if !ok {
-                return nil, fmt.Errorf("failed to convert display_id to int")
-            }
+            taskDisplayID, ok := createTask["display_id"].(float64)
+			if !ok {
+				return nil, fmt.Errorf("failed to convert display_id to float64")
+			}
 
-            taskResult, err := m.WaitForTaskComplete(taskDisplayID, customReturnAttributes, timeout)
+			taskResult, err := m.WaitForTaskComplete(int(taskDisplayID), customReturnAttributes, timeout)
             if err != nil {
                 return nil, fmt.Errorf("failed to wait for task complete: %v", err)
             }
@@ -278,20 +278,25 @@ func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackD
 
 
 func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *string, timeout *int) (map[string]interface{}, error) {
-    subscription := fmt.Sprintf(`
-        subscription TaskWaitForStatus($task_display_id: Int!){
-            task_stream(cursor: {initial_value: {timestamp: "1970-01-01"}}, batch_size: 1, where: {display_id: {_eq: $task_display_id}}){
-                %s
-            }
-        }
-        %s
-    `, *customReturnAttributes, TaskFragment)
-
-    if customReturnAttributes != nil {
-        subscription = fmt.Sprintf(subscription, *customReturnAttributes, "")
-    } else {
-        subscription = fmt.Sprintf(subscription, "...task_fragment", TaskFragment)
-    }
+    var subscription string
+	if customReturnAttributes != nil {
+		subscription = fmt.Sprintf(`
+			subscription TaskWaitForStatus($task_display_id: Int!){
+				task_stream(cursor: {initial_value: {timestamp: "1970-01-01"}}, batch_size: 1, where: {display_id: {_eq: $task_display_id}}){
+					%s
+				}
+			}
+		`, *customReturnAttributes)
+	} else {
+		subscription = fmt.Sprintf(`
+			subscription TaskWaitForStatus($task_display_id: Int!){
+				task_stream(cursor: {initial_value: {timestamp: "1970-01-01"}}, batch_size: 1, where: {display_id: {_eq: $task_display_id}}){
+					...task_fragment
+				}
+			}
+			%s
+		`, TaskFragment)
+	}
 
     variables := map[string]interface{}{
         "task_display_id": taskDisplayID,

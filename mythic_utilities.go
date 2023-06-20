@@ -3,7 +3,6 @@ package Mythic_Go_Scripting
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,6 +16,8 @@ import (
 	"context"
 	
 	"github.com/machinebox/graphql"
+	"github.com/gorilla/websocket"
+
 )
 
 func NewMythic(username, password, serverIP string, serverPort int, apiToken string, ssl bool, timeout int) *Mythic {
@@ -309,43 +310,53 @@ func (m *Mythic) HttpGetChunked(url string, chunkSize int) (<-chan []byte, error
 
 
 func (m *Mythic) GraphQLSubscription(query string, variables map[string]interface{}, timeout int) (<-chan map[string]interface{}, error) {
-	data := map[string]interface{}{
+	// Create WebSocket connection
+	u := url.URL{Scheme: "ws", Host: fmt.Sprintf("%s:%d", m.ServerIP, m.ServerPort), Path: "/graphql"}
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+
+	// Prepare the request
+	req := map[string]interface{}{
 		"query":     query,
 		"variables": variables,
+		"type":      "start",  // This is needed to start the subscription
 	}
-
-	response, err := m.HttpPost(m.HTTP+m.ServerIP+":"+strconv.Itoa(m.ServerPort)+"/graphql", data)
+	reqBytes, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	if responseErrors, ok := response["errors"]; ok {
-		errMsg := ""
-		for _, err := range responseErrors.([]interface{}) {
-			errMsg += fmt.Sprintf("%s\n", err.(map[string]interface{})["message"])
-		}
-		return nil, errors.New(errMsg)
+	// Send the request
+	if err := c.WriteMessage(websocket.TextMessage, reqBytes); err != nil {
+		return nil, err
 	}
 
+	// Create a channel to send the responses
 	events := make(chan map[string]interface{})
+
 	go func() {
 		defer close(events)
 		for {
 			select {
 			case <-time.After(time.Duration(timeout) * time.Second):
+				// If we have reached the timeout, stop listening for messages
 				return
 			default:
-				response, err := m.HttpGet(m.HTTP + m.ServerIP + ":" + strconv.Itoa(m.ServerPort) + "/graphql/events")
+				_, message, err := c.ReadMessage()
 				if err != nil {
 					log.Println("Error receiving GraphQL subscription event:", err)
 					return
 				}
+
 				var event map[string]interface{}
-				err = json.Unmarshal(response, &event)
-				if err != nil {
+				if err := json.Unmarshal(message, &event); err != nil {
 					log.Println("Error parsing GraphQL subscription event:", err)
 					return
 				}
+
 				events <- event
 			}
 		}
@@ -541,4 +552,13 @@ func (mythic *Mythic) CreateNewAPIToken() error {
 	}
 
     return nil
+}
+
+func getWebSocketTransport(serverIP string, serverPort int, path string) (*websocket.Conn, error) {
+    u := url.URL{Scheme: "ws", Host: fmt.Sprintf("%s:%d", serverIP, serverPort), Path: path}
+    c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+    if err != nil {
+        return nil, err
+    }
+    return c, nil
 }
