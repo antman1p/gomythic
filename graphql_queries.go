@@ -2,51 +2,12 @@ package Mythic_Go_Scripting
 
 
 var (
-	CreateAPITokenMutation = `
-		mutation createAPITokenMutation {
-			createAPIToken(token_type: "User") {
-				id
-				token_value
-				status
-				error
-				operator_id
-			}
-		}
-	`
-
 	GetAPITokensQuery = `
 		query GetAPITokens {
 			apitokens(where: {active: {_eq: true}}) {
 				token_value
 				active
 				id
-			}
-		}
-	`
-
-	CreateTaskMutation = `
-		mutation createTasking(
-			$callback_id: Int!,
-			$command: String!,
-			$params: String!,
-			$token_id: Int,
-			$tasking_location: String,
-			$original_params: String,
-			$parameter_group_name: String
-		) {
-			createTask(
-				callback_id: $callback_id,
-				command: $command,
-				params: $params,
-				token_id: $token_id,
-				tasking_location: $tasking_location,
-				original_params: $original_params,
-				parameter_group_name: $parameter_group_name
-			) {
-				status
-				id
-				display_id
-				error
 			}
 		}
 	`
@@ -94,31 +55,7 @@ var (
 		}
 	`
 
-	TaskFragment = `
-		fragment task_fragment on task {
-			callback {
-				id
-				display_id
-			}
-			id
-			display_id
-			operator {
-				username
-			}
-			status
-			completed
-			original_params
-			display_params
-			timestamp
-			command_name
-			tasks {
-				id
-			}
-			token {
-				token_id
-			}
-		}
-	`
+
 
 	MythicTreeFragment = `
 		fragment mythictree_fragment on mythictree {

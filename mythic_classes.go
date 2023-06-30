@@ -19,6 +19,118 @@ type Mythic struct {
 	Schema             string `json:"schema"`
 }
 
+type CreateTaskMutation struct {
+	CreateTask struct {
+		Status    MythicStatus `graphql:"status"`
+		ID        int `graphql:"id"`
+		DisplayID int `graphql:"display_id"`
+		Error     string `graphql:"error"`
+	} `graphql:"createTask(callback_id: $callback_id, command: $command, params: $params, token_id: $token_id, tasking_location: $tasking_location, original_params: $original_params, parameter_group_name: $parameter_group_name)"`
+}
+
+
+// Defining struct for Callback
+type Callback struct {
+	Architecture    string          `graphql:"architecture"`
+	Description     string          `graphql:"description"`
+	Domain          string          `graphql:"domain"`
+	ExternalIP      string          `graphql:"external_ip"`
+	Host            string          `graphql:"host"`
+	ID              int             `graphql:"id"`
+	DisplayID       int             `graphql:"display_id"`
+	IntegrityLevel  int              `graphql:"integrity_level"`
+	IP              string          `graphql:"ip"`
+	ExtraInfo       string          `graphql:"extra_info"`
+	SleepInfo       string          `graphql:"sleep_info"`
+	PID             int             `graphql:"pid"`
+	OS              string          `graphql:"os"`
+	User            string          `graphql:"user"`
+	AgentCallbackID string          `graphql:"agent_callback_id"`
+	OperationID     int             `graphql:"operation_id"`
+	ProcessName     string          `graphql:"process_name"`
+	Payload         CallbackPayload `graphql:"payload"`
+}
+
+// Defining struct for Payload
+type CallbackPayload struct {
+	OS          string             `graphql:"os"`
+	PayloadType CallbackPayloadType `graphql:"payloadtype"`
+	Description string             `graphql:"description"`
+	UUID        string             `graphql:"uuid"`
+}
+
+// Defining struct for PayloadType
+type CallbackPayloadType struct {
+	Name string `graphql:"name"`
+}
+
+type CallbackQuery struct {
+	Callback []Callback `graphql:"callback(order_by: {id: asc})"`
+}
+
+type ActiveCallbackQuery struct {
+	Callback []Callback `graphql:"callback(where: {active: {_eq: true}}, order_by: {id: asc})"`
+}
+
+type TaskFragment struct {
+	Callback struct {
+		ID         int    `graphql:"id"`
+		DisplayID  int    `graphql:"display_id"`
+	} `graphql:"callback"`
+	ID             int    `graphql:"id"`
+	DisplayID      int    `graphql:"display_id"`
+	Operator       struct {
+		Username string   `graphql:"username"`
+	} `graphql:"operator"`
+	Status         MythicStatus     `graphql:"status"`
+	Completed      bool   `graphql:"completed"`
+	OriginalParams string `graphql:"original_params"`
+	DisplayParams  string `graphql:"display_params"`
+	Timestamp      string `graphql:"timestamp"`
+	CommandName    string `graphql:"command_name"`
+	Tasks          []struct {
+		ID int `graphql:"id"`
+	} `graphql:"tasks"`
+	Token struct {
+		TokenID string `graphql:"token_id"`
+	} `graphql:"token"`
+}
+
+type TaskQuery struct {
+	Task []TaskFragment `graphql:"task(order_by: {id: desc})"`
+}
+
+type TaskQueryWithCallback struct {
+	Task []TaskFragment `graphql:"task(where: {callback: {display_id: {_eq: $callbackDisplayID}}}, order_by: {id: asc})"`
+}
+
+type TaskWaitForStatusSubscription struct {
+    TaskStream TaskFragment `graphql:"task_stream(cursor: {initial_value: {timestamp: \"1970-01-01\"}}, batch_size: 1, where: {display_id: {_eq: $task_display_id}})"`
+}
+
+type TaskWaitForStatusSubscriptionVariables struct {
+    TaskDisplayID int `json:"task_display_id"`
+}
+
+type CreateAPITokenMutation struct {
+	CreateAPIToken CreateAPIToken `graphql:"createAPIToken(token_type: \"User\")"`
+}
+
+type CreateAPIToken struct {
+	ID         int    `graphql:"id"`
+	TokenValue string `graphql:"token_value"`
+	Status     MythicStatus     `graphql:"status"`
+	Error      string `graphql:"error"`
+	OperatorID int    `graphql:"operator_id"`
+}
+
+
+
+
+
+
+
+
 func (m *Mythic) String() string {
 	data, _ := json.MarshalIndent(m, "", "    ")
 	return string(data)

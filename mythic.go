@@ -4,6 +4,7 @@ import (
 	"log"
 	"fmt"
 	"encoding/json"
+	"time"
 )
 
 func Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
@@ -25,309 +26,212 @@ func Login(serverIP string, serverPort int, username, password, apiToken string,
 	return mythic, nil
 }
 
-func (m *Mythic) ExecuteCustomQuery(query string, variables map[string]interface{}) (map[string]interface{}, error) {
-	res, err := m.GraphqlPost(query, variables)
+
+/* func (m *Mythic) ExecuteCustomQuery(query string, variables map[string]interface{}) error {
+	// Check if the query string is empty
+	if strings.TrimSpace(query) == "" {
+		return errors.New("query string is empty")
+	}
+
+	// Get the endpoint and http.Client
+	endpoint, httpClient := m.GetHTTPTransport()
+
+	// Create a new client
+	client := graphql.NewClient(endpoint, httpClient)
+
+	ctx := context.Background()
+
+	// Execute the query
+	err = client.Exec(ctx, query, nil, variables)
 	if err != nil {
 		log.Printf("Hit an exception within ExecuteCustomQuery: %v", err)
-		return nil, err
+		return err
 	}
 
-	// Perform a type assertion to convert res from interface{} to map[string]interface{}
-	result, ok := res.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("failed to convert response to map[string]interface{}")
-	}
-
-	return result, nil
-}
-
-
-
+	return nil
+} */
 
 // # ########### Callback Functions #############
 
 // CallbackAttributes represents the returned data structure of a callback
 type CallbackAttributes map[string]interface{}
 
-func (m *Mythic) GetAllCallbacks(customReturnAttributes string) ([]map[string]interface{}, error) {
-	if customReturnAttributes == "" {
-		customReturnAttributes = CallbackFragment
-	}
-	// Here's how you reference it in a query
-	query := fmt.Sprintf(`
-		query CurrentCallbacks {
-			callback(order_by: {id: asc}) {
-				...callback_fragment
-			}
-		}
-		%s
-	`, customReturnAttributes)
+func (m *Mythic) GetAllCallbacks() ([]Callback, error) {
+	var query CallbackQuery
 
+	err := m.GraphqlPost(&query, nil, "query")
 
-	variables := make(map[string]interface{})
-	res, err := m.GraphqlPost(query, variables)
 	if err != nil {
 		return nil, err
 	}
 
-	if resMap, ok := res.(map[string]interface{}); ok {
-		if callbacks, ok := resMap["callback"].([]interface{}); ok {
-			result := make([]map[string]interface{}, len(callbacks))
-			for i, v := range callbacks {
-				result[i] = v.(map[string]interface{})
-			}
-			return result, nil
-		} else {
-			return nil, fmt.Errorf("unable to convert 'callback' data to expected format")
-		}
-	} else {
-		return nil, fmt.Errorf("unable to convert GraphQL response to expected format")
-	}
+	return query.Callback, nil
 }
 
-// GetAllActiveCallbacks retrieves information about all currently active callbacks
-func (m *Mythic) GetAllActiveCallbacks(customReturnAttributes string) ([]map[string]interface{}, error) {
-	if customReturnAttributes == "" {
-		customReturnAttributes = CallbackFragment
-	}
-	// Here's how you reference it in a query
-	query := fmt.Sprintf(`
-		query CurrentCallbacks {
-			callback(where: {active: {_eq: true}}, order_by: {id: asc}) {
-				...callback_fragment
-			}
-		}
-		%s
-	`, customReturnAttributes)
 
-	variables := make(map[string]interface{})
-	res, err := m.GraphqlPost(query, variables)
+
+
+func (m *Mythic) GetAllActiveCallbacks() ([]Callback, error) {
+	var query ActiveCallbackQuery
+
+	err := m.GraphqlPost(&query, nil, "query")
+
 	if err != nil {
 		return nil, err
 	}
 
-	if resMap, ok := res.(map[string]interface{}); ok {
-		if callbacks, ok := resMap["callback"].([]interface{}); ok {
-			result := make([]map[string]interface{}, len(callbacks))
-			for i, v := range callbacks {
-				result[i] = v.(map[string]interface{})
-			}
-			return result, nil
-		} else {
-			return nil, fmt.Errorf("unable to convert 'callback' data to expected format")
-		}
-	} else {
-		return nil, fmt.Errorf("unable to convert GraphQL response to expected format")
-	}
+	return query.Callback, nil
 }
 
 
-// # ########## Task Functions #################
+
+// ############ Task Functions #################
 
 
-func (m *Mythic) GetAllTasks(customReturnAttributes *string, callbackDisplayID *int) ([]map[string]interface{}, error) {
-	var variables map[string]interface{}
-	var query string
+func (m *Mythic) GetAllTasks(callbackDisplayID *int) ([]TaskFragment, error) {
 	if callbackDisplayID != nil {
-		if customReturnAttributes == nil {
-			query = fmt.Sprintf(`
-				query CurrentTasks($callback_display_id: Int){
-					task(where: {callback: {display_id: {_eq: $callback_display_id}}}}, order_by: {id: asc}){
-						...task_fragment
-					}
-				}
-				%s
-			`, TaskFragment)
-			
-			variables = map[string]interface{}{
-				"callback_display_id": *callbackDisplayID,
-			}
-		} else {
-			query = fmt.Sprintf(`
-				query CurrentTasks{
-						task(where: {callback: {display_id: {_eq: $callback_display_id}}}}, order_by: {id: asc}){
-							%s
-						}
-				}
-			`, *customReturnAttributes)
-		
-			variables = map[string]interface{}{
-				"callback_display_id": *callbackDisplayID,
-			}
+		var query TaskQueryWithCallback
+		err := m.GraphqlPost(&query, map[string]interface{}{
+			"callbackDisplayID": *callbackDisplayID,
+		}, "query")
+		if err != nil {
+			return nil, err
 		}
+		return query.Task, nil
 	} else {
-		if customReturnAttributes == nil {
-			query = fmt.Sprintf(`
-				query CurrentTasks($callback_display_id: Int){
-					task(order_by: {id: desc}){
-						...task_fragment
-					}
-				}
-				%s
-			`, TaskFragment)
-			
-		} else {
-			query = fmt.Sprintf(`
-				query CurrentTasks{
-					task(order_by: {id: desc}){
-						%s
-					}
-				}
-			`, *customReturnAttributes)
+		var query TaskQuery
+		err := m.GraphqlPost(&query, nil, "query")
+		if err != nil {
+			return nil, err
 		}
+		return query.Task, nil
 	}
-
-    initialTasks, err := m.GraphqlPost(query, variables)
-    if err != nil {
-        return nil, fmt.Errorf("failed to execute graphql post: %v", err)
-    }
-	
-	// Assert the type back to map[string]interface{}
-	result, ok := initialTasks.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("failed to convert response to map[string]interface{}")
-	}
-	
-	// Check if tasks list is empty
-    tasks, ok := result["task"]
-    if !ok || len(tasks.([]interface{})) == 0 {
-        // return an empty task list and nil error to signify no tasks found
-        return []map[string]interface{}{}, nil
-    }
-	
-	rawTasks, ok := result["task"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("failed to convert response to slice of interface{}")
-	}
-
-	taskList := make([]map[string]interface{}, len(rawTasks))
-	for i, rawTask := range rawTasks {
-		task, ok := rawTask.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("failed to convert individual task to map[string]interface{}")
-		}
-		taskList[i] = task
-	}
-
-	return taskList, nil
 }
 
 
 
-func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackDisplayID int, tokenID *int, waitForComplete bool, customReturnAttributes *string, timeout *int) (map[string]interface{}, error) {
-    var parameterString string
-    switch parameters := parameters.(type) {
-    case string:
-        parameterString = parameters
-    case map[string]interface{}:
-        parametersBytes, err := json.Marshal(parameters)
-        if err != nil {
-            return nil, err
-        }
-        parameterString = string(parametersBytes)
-    default:
-        return nil, fmt.Errorf("parameters must be a string or map[string]interface{}")
-    }
 
-    taskingLocation := "command_line"
-    if _, ok := parameters.(map[string]interface{}); ok {
-        taskingLocation = "scripting"
-    }
 
-    variables := map[string]interface{}{
-        "callback_id":      callbackDisplayID,
-        "command":          commandName,
-        "params":           parameterString,
-        "token_id":         tokenID,
-        "tasking_location": taskingLocation,
-    }
 
-    res, err := m.GraphqlPost(CreateTaskMutation, variables)
+func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackDisplayID int, tokenID *int, originalParams interface{}, parameterGroupName interface{}, waitForComplete bool, timeout *int) (*CreateTaskMutation, error) {
+	var parameterString string
+	switch parameters := parameters.(type) {
+	case string:
+		parameterString = parameters
+	case map[string]interface{}:
+		parametersBytes, err := json.Marshal(parameters)
+		if err != nil {
+			return nil, err
+		}
+		parameterString = string(parametersBytes)
+	default:
+		return nil, fmt.Errorf("parameters must be a string or map[string]interface{}")
+	}
+
+	taskingLocation := "command_line"
+	if _, ok := parameters.(map[string]interface{}); ok {
+		taskingLocation = "scripting"
+	}
+
+	var query CreateTaskMutation
+	
+	variables := map[string]interface{}{
+		"callback_id":             callbackDisplayID,
+		"command":                 commandName,
+		"params":                  parameterString,
+		"tasking_location":        taskingLocation,
+	}
+	
+
+	
+	if tokenID != nil {
+    variables["token_id"] = *tokenID
+	} else {
+		variables["token_id"] = 0
+	}
+
+	if originalParams != "" {
+		variables["original_params"] = originalParams
+	} else {
+		variables["original_params"] = ""
+	}
+
+	if parameterGroupName != "" {
+		variables["parameter_group_name"] = parameterGroupName
+	} else {
+		variables["parameter_group_name"] = ""
+	}
+
+	
+	err := m.GraphqlPost(&query, variables, "mutation")
 	if err != nil {
 		return nil, err
 	}
 
-	resultMap, ok := res.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("result is not a map[string]interface{}")
-	}
-
-	createTask, ok := resultMap["createTask"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("createTask is not a map[string]interface{}")
-	}
-
-    if createTask["status"] == "success" {
-        if waitForComplete {
-            taskDisplayID, ok := createTask["display_id"].(float64)
-			if !ok {
-				return nil, fmt.Errorf("failed to convert display_id to float64")
+	if query.CreateTask.Status.Equals("success") {
+		if waitForComplete {
+			taskDisplayID := query.CreateTask.DisplayID
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert display_id to integer: %v", err)
 			}
 
-			taskResult, err := m.WaitForTaskComplete(int(taskDisplayID), customReturnAttributes, timeout)
-            if err != nil {
-                return nil, fmt.Errorf("failed to wait for task complete: %v", err)
-            }
-            return taskResult, nil
-        }
-        return createTask, nil
-    }
+			taskResult, err := m.WaitForTaskComplete(taskDisplayID, nil, timeout) // Assuming you don't need customReturnAttributes
+			if err != nil {
+				return nil, fmt.Errorf("failed to wait for task complete: %v", err)
+			}
+			return taskResult, nil
+		}
+		return &query, nil
+	}
 
-    return nil, fmt.Errorf("failed to create task: %s", createTask["error"])
+	return nil, fmt.Errorf("failed to create task: %s", query.CreateTask.Error)
 }
 
 
-func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *string, timeout *int) (map[string]interface{}, error) {
-    var subscription string
-	if customReturnAttributes != nil {
-		subscription = fmt.Sprintf(`
-			subscription TaskWaitForStatus($task_display_id: Int!){
-				task_stream(cursor: {initial_value: {timestamp: "1970-01-01"}}, batch_size: 1, where: {display_id: {_eq: $task_display_id}}){
-					%s
-				}
-			}
-		`, *customReturnAttributes)
-	} else {
-		subscription = fmt.Sprintf(`
-			subscription TaskWaitForStatus($task_display_id: Int!){
-				task_stream(cursor: {initial_value: {timestamp: "1970-01-01"}}, batch_size: 1, where: {display_id: {_eq: $task_display_id}}){
-					...task_fragment
-				}
-			}
-			%s
-		`, TaskFragment)
-	}
 
-    variables := map[string]interface{}{
-        "task_display_id": taskDisplayID,
+
+func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *string, timeout *int) (*CreateTaskMutation, error) {
+    var subscription TaskWaitForStatusSubscription
+
+    variables := TaskWaitForStatusSubscriptionVariables{
+        TaskDisplayID: taskDisplayID,
     }
 
-    results, err := m.GraphQLSubscription(subscription, variables, *timeout)
+    variableMap := structToMap(variables)
+
+    results, err := m.GraphQLSubscription(&subscription, variableMap, *timeout)
     if err != nil {
         return nil, err
     }
 
+    start := time.Now()
     for result := range results {
-        taskStream, ok := result["task_stream"].([]map[string]interface{})
-        if !ok || len(taskStream) != 1 {
-            return nil, fmt.Errorf("task not found")
-        }
+        elapsed := time.Since(start)
+        log.Printf("Waited for %v", elapsed)
 
-        // type check for status and completed
-        status, ok := taskStream[0]["status"].(string)
-        if !ok {
-            return nil, fmt.Errorf("invalid status type")
-        }
-
-        completed, ok := taskStream[0]["completed"].(bool)
-        if !ok {
-            return nil, fmt.Errorf("invalid completed type")
-        }
-
-        if status == "error" || completed {
-            return taskStream[0], nil
+        if result.TaskStream.Status.Equals("error") || result.TaskStream.Status.Equals("completed") { // comparing with int values
+            taskResult := &CreateTaskMutation{
+                CreateTask: struct {
+                    Status    MythicStatus    `graphql:"status"`
+                    ID        int `graphql:"id"`
+                    DisplayID int `graphql:"display_id"`
+                    Error     string `graphql:"error"` // assign the Error value here
+                } {
+                    Status:    result.TaskStream.Status,
+                    ID:        result.TaskStream.ID,
+                    DisplayID: result.TaskStream.DisplayID,
+                    Error:     "", // this is a placeholder. Please replace this with the actual Error field from your result.TaskStream if it exists
+                },
+            }
+            return taskResult, nil
         }
     }
-    
+
     return nil, fmt.Errorf("task not completed")
 }
+
+
+
+
+
+

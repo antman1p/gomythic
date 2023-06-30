@@ -14,33 +14,16 @@ import (
 	"log"
 	"strconv"
 	"context"
+	"reflect"
 	
-	"github.com/machinebox/graphql"
-	"github.com/gorilla/websocket"
+	"github.com/hasura/go-graphql-client"
+	"nhooyr.io/websocket"
 
 )
 
-func NewMythic(username, password, serverIP string, serverPort int, apiToken string, ssl bool, timeout int) *Mythic {
-	protocol := "http"
-	if ssl {
-		protocol = "https"
-	}
+func (m *Mythic) GetHTTPTransport() (http.RoundTripper, string) {
+	url := fmt.Sprintf("%s://%s:%d/graphql/", m.HTTP, m.ServerIP, m.ServerPort)
 
-	return &Mythic{
-		Username:         username,
-		Password:         password,
-		APIToken:         apiToken,
-		ServerIP:         serverIP,
-		ServerPort:       serverPort,
-		SSL:              ssl,
-		HTTP:             protocol,
-		WS:               "ws",
-		GlobalTimeout:    timeout,
-		ScriptingVersion: "0.1.4",
-	}
-}
-
-func (m *Mythic) GetHTTPTransport() http.RoundTripper {
 	return roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		// Set custom headers here
 		req.Header = m.GetHeaders()
@@ -56,60 +39,35 @@ func (m *Mythic) GetHTTPTransport() http.RoundTripper {
 		}
 
 		return transport.RoundTrip(req)
-	})
+	}), url
 }
 
-func (m *Mythic) GraphqlPost(query string, variables map[string]interface{}) (interface{}, error) {
-	// Set up GraphQL client
-	url := fmt.Sprintf("%s://%s:%d/graphql/", m.HTTP, m.ServerIP, m.ServerPort)
 
-	client := graphql.NewClient(url, graphql.WithHTTPClient(&http.Client{
-		Transport: m.GetHTTPTransport(),
-	}))
+func (m *Mythic) GraphqlPost(operation interface{}, variables map[string]interface{}, operationType string) error {
+	transport, serverURL := m.GetHTTPTransport()
 
-	// Prepare the request
-	req := graphql.NewRequest(query)
-	
-	// Set the headers
-	req.Header = m.GetHeaders()
+	client := graphql.NewClient(serverURL, &http.Client{Transport: transport})
 
-	// Set variables if any
-	if variables != nil {
-		for key, value := range variables {
-			req.Var(key, value)
+	// Check operation type and execute accordingly
+	if operationType == "query" {
+		err := client.Query(context.Background(), operation, variables)
+		if err != nil {
+			return err
 		}
-	}
-
-	// Prepare a context with timeout
-	ctx := context.Background()
-	if m.GlobalTimeout >= 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(m.GlobalTimeout)*time.Second)
-		defer cancel()
-	}
-
-	// Execute the request
-	var res map[string]interface{}
-	if err := client.Run(ctx, req, &res); err != nil {
-		return nil, err
-	}
-	
-	//DEBUG
-	log.Printf("Response: %v\n", res)
-
-
-	// Check for errors in the response
-	if responseErrors, ok := res["errors"]; ok {
-		errMsg := ""
-		for _, err := range responseErrors.([]interface{}) {
-			errMsg += fmt.Sprintf("%s\n", err.(map[string]interface{})["message"])
+	} else if operationType == "mutation" {
+		err := client.Mutate(context.Background(), operation, variables)
+		if err != nil {
+			return err
 		}
-		return nil, fmt.Errorf("%s", errMsg)
+	} else {
+		return fmt.Errorf("invalid operation type: %s", operationType)
 	}
 
-	// If there are no errors, return the response
-	return res, nil
+	return nil
 }
+
+
+
 
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
@@ -123,8 +81,11 @@ func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]i
         return nil, err
     }
 
+    // Use underscore to ignore the URL return value
+    transport, _ := m.GetHTTPTransport()
+
     client := &http.Client{
-        Transport: m.GetHTTPTransport(),
+        Transport: transport,
     }
 
     req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
@@ -134,8 +95,6 @@ func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]i
 
     req.Header = m.GetHeaders()
     req.Header.Set("Content-Type", "application/json")
-	
-
 
     resp, err := client.Do(req)
     if err != nil {
@@ -147,19 +106,18 @@ func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]i
     if err != nil {
         return nil, err
     }
-	
-	log.Printf("Response body: %s\n", responseData)  // log the response body DEBUG
 
+    log.Printf("Response body: %s\n", responseData)  // log the response body DEBUG
 
     var response map[string]interface{}
     err = json.Unmarshal(responseData, &response)
     if err != nil {
         return nil, err
     }
-	
 
     return response, nil
 }
+
 
 
 func (m *Mythic) GetHeaders() http.Header {
@@ -173,11 +131,22 @@ func (m *Mythic) GetHeaders() http.Header {
 	return headers
 }
 
+// HeaderToMap is assumed to convert http.Header to a map[string]interface{} type. 
+// Replace this with your actual function if it is different.
+func HeaderToMap(header http.Header) map[string]interface{} {
+	// Implement this function based on your requirements.
+	return make(map[string]interface{})
+}
+
+
 
 
 func (m *Mythic) HttpPostForm(data url.Values, url string) (map[string]interface{}, error) {
+	// Ignore the returned URL using underscore
+	transport, _ := m.GetHTTPTransport()
+
 	client := &http.Client{
-		Transport: m.GetHTTPTransport(),
+		Transport: transport,
 	}
 
 	req, err := http.NewRequest("POST", url, strings.NewReader(data.Encode()))
@@ -187,7 +156,6 @@ func (m *Mythic) HttpPostForm(data url.Values, url string) (map[string]interface
 
 	req.Header = m.GetHeaders()
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -209,9 +177,13 @@ func (m *Mythic) HttpPostForm(data url.Values, url string) (map[string]interface
 	return response, nil
 }
 
+
 func (m *Mythic) HttpGetDictionary(url string) (map[string]interface{}, error) {
+	// Ignore the returned URL using underscore
+	transport, _ := m.GetHTTPTransport()
+	
 	client := &http.Client{
-		Transport: m.GetHTTPTransport(),
+		Transport: transport,
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -242,8 +214,11 @@ func (m *Mythic) HttpGetDictionary(url string) (map[string]interface{}, error) {
 }
 
 func (m *Mythic) HttpGet(url string) ([]byte, error) {
+	// Ignore the returned URL using underscore
+	transport, _ := m.GetHTTPTransport()
+	
 	client := &http.Client{
-		Transport: m.GetHTTPTransport(),
+		Transport: transport,
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -268,8 +243,11 @@ func (m *Mythic) HttpGet(url string) ([]byte, error) {
 }
 
 func (m *Mythic) HttpGetChunked(url string, chunkSize int) (<-chan []byte, error) {
+	// Ignore the returned URL using underscore
+	transport, _ := m.GetHTTPTransport()
+	
 	client := &http.Client{
-		Transport: m.GetHTTPTransport(),
+		Transport: transport,
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -309,61 +287,56 @@ func (m *Mythic) HttpGetChunked(url string, chunkSize int) (<-chan []byte, error
 }
 
 
-func (m *Mythic) GraphQLSubscription(query string, variables map[string]interface{}, timeout int) (<-chan map[string]interface{}, error) {
-	// Create WebSocket connection
-	u := url.URL{Scheme: "ws", Host: fmt.Sprintf("%s:%d", m.ServerIP, m.ServerPort), Path: "/graphql"}
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	defer c.Close()
+func (m *Mythic) GraphQLSubscription(subscription interface{}, variables map[string]interface{}, timeout int) (<-chan *TaskWaitForStatusSubscription, error) {
+    var endpoint = "/graphql/"
+    
+    // Prepare the client
+    client := graphql.NewSubscriptionClient(endpoint).
+        WithConnectionParams(HeaderToMap(m.GetHeaders())).
+        WithTimeout(time.Duration(timeout) * time.Second).
+        WithWebSocket(func(sc *graphql.SubscriptionClient) (graphql.WebsocketConn, error) {
+            conn, err := m.getWebSocketTransport(endpoint)
+            if err != nil {
+                return nil, err
+            }
 
-	// Prepare the request
-	req := map[string]interface{}{
-		"query":     query,
-		"variables": variables,
-		"type":      "start",  // This is needed to start the subscription
-	}
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
+            return &graphql.WebsocketHandler{
+                Conn: conn,
+            }, nil
+        })
 
-	// Send the request
-	if err := c.WriteMessage(websocket.TextMessage, reqBytes); err != nil {
-		return nil, err
-	}
+	// Create a channel to receive responses
+    events := make(chan *TaskWaitForStatusSubscription)
 
-	// Create a channel to send the responses
-	events := make(chan map[string]interface{})
+    // Subscribe with the prepared request
+    _, err := client.Subscribe(subscription, variables, func(data []byte, err error) error {
+        if err != nil {
+            log.Println("Error in GraphQL subscription:", err)
+            return err
+        }
 
-	go func() {
-		defer close(events)
-		for {
-			select {
-			case <-time.After(time.Duration(timeout) * time.Second):
-				// If we have reached the timeout, stop listening for messages
-				return
-			default:
-				_, message, err := c.ReadMessage()
-				if err != nil {
-					log.Println("Error receiving GraphQL subscription event:", err)
-					return
-				}
+        var event TaskWaitForStatusSubscription
+        if err := json.Unmarshal(data, &event); err != nil {
+            log.Println("Error parsing GraphQL subscription event:", err)
+            return err
+        }
 
-				var event map[string]interface{}
-				if err := json.Unmarshal(message, &event); err != nil {
-					log.Println("Error parsing GraphQL subscription event:", err)
-					return
-				}
+        events <- &event
+        return nil
+    })
 
-				events <- event
-			}
-		}
-	}()
+    if err != nil {
+        return nil, err
+    }
 
-	return events, nil
+    // Run the client in a separate goroutine
+    go func() {
+        client.Run()
+    }()
+
+    return events, nil
 }
+
 
 func (m *Mythic) FetchGraphQLSchema() (string, error) {
 	response, err := m.HttpGet(m.HTTP + m.ServerIP + ":" + strconv.Itoa(m.ServerPort) + "/graphql/schema.json")
@@ -384,7 +357,7 @@ func (m *Mythic) LoadMythicSchema() bool {
 	return true
 }
 
-func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout int) {
+func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout int) *graphql.Client {
 	mythic.Username = username
 	mythic.Password = password
 	mythic.ServerIP = serverIP
@@ -404,7 +377,22 @@ func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username
 	// Set the scripting version here
 	mythic.ScriptingVersion = "0.1.4"
 	
+	url := fmt.Sprintf("%s://%s:%d/graphql/", mythic.HTTP, mythic.ServerIP, mythic.ServerPort)
+
+	var transport http.RoundTripper
+	if ssl {
+		transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	} else {
+		transport = http.DefaultTransport
+	}
+
+	client := graphql.NewClient(url, &http.Client{Transport: transport})
+
+	return client
 }
+
 
 
 func (mythic *Mythic) AuthenticateToMythic() error {
@@ -434,70 +422,44 @@ func (mythic *Mythic) AuthenticateToMythic() error {
 }
 
 func (mythic *Mythic) HandleAPITokens() error {
-	
-	log.Printf("Sending GraphqlPost request...\n") //DEBUG
-	
-	// Handle data as a generic interface{} first, then check and convert to map or array
-	currentTokens, err := mythic.GraphqlPost(GetAPITokensQuery, map[string]interface{}{})
+	log.Printf("Sending GraphqlPost request...\n") 
 
-	// Check if error is nil
+	var query struct {
+		APITokens []struct {
+			TokenValue string `graphql:"token_value"`
+			Active     bool
+			ID         int
+		} `graphql:"apitokens(where: {active: {_eq: true}})"`
+	}
+
+	err := mythic.GraphqlPost(&query, map[string]interface{}{}, "query")
 	if err != nil {
-		// Handle error
-		log.Printf("GraphqlPost Error: %v", err) // DEBUG
-		return fmt.Errorf("failed to make GraphqlPost request: %v", err)
-	} else if currentTokens == nil {
-		// Handle nil response
-		log.Printf("GraphqlPost returned nil response")
-		return fmt.Errorf("GraphqlPost returned nil response")
-	}
-	
-	// Try to convert response to a map
-	responseMap, ok := currentTokens.(map[string]interface{})
-	if !ok {
-		log.Fatal("response is not a map[string]interface{}")
-		return fmt.Errorf("response is not a map[string]interface{}")
+		//DEBUG
+		log.Printf("GraphqlPost ERROR: %s", err)
+		return err
 	}
 
-	// Extract 'apitokens' from response
-	apitokens, _ := responseMap["apitokens"]
-
-	// Handle apitokens
-	switch apitokens := apitokens.(type) {
-	case []interface{}:
-		if len(apitokens) > 0 {
-			// Try to convert the first item to a map
-			firstToken, ok := apitokens[0].(map[string]interface{})
-			if !ok {
-				log.Fatal("first token is not a map[string]interface{}")
-				return fmt.Errorf("first token is not a map[string]interface{}")
-			}
-
-			// Try to convert the 'token_value' field to a string
-			tokenValue, ok := firstToken["token_value"].(string)
-			if !ok {
-				log.Fatal("token_value is not a string")
-				return fmt.Errorf("token_value is not a string")
-			}
-
-			// Store the token value in the Mythic struct
-			mythic.APIToken = tokenValue
-		} else {
-			// If there are no current tokens, you could create a new one here
-			// Note that you'll need to handle the error from this function
-			err := mythic.CreateNewAPIToken()
-			if err != nil {
-				log.Fatal("Failed to create new API token: ", err)
-				return err
-			}
+	if len(query.APITokens) > 0 {
+		//DEBUG 
+		log.Printf("query.APITokens > 0: %v", query.APITokens)
+		tokenValue := query.APITokens[0].TokenValue
+		mythic.APIToken = tokenValue
+	} else {
+		err := mythic.CreateNewAPIToken()
+		if err != nil {
+			log.Fatal("Failed to create a new API token: ", err)
+			return err
 		}
-	default:
-		log.Printf("Unexpected data type: %T\n", apitokens) // Log the actual type of data
-		log.Fatal("Data is neither a map nor an array")
-		return fmt.Errorf("Data is neither a map nor an array")
 	}
 
 	return nil
 }
+
+
+
+
+
+
 
 func (mythic *Mythic) HandleAPITokenMap(data map[string]interface{}) error {
 	apitokens, ok := data["apitokens"].([]interface{})
@@ -529,36 +491,68 @@ func (mythic *Mythic) HandleExistingAPIToken(apitokens []interface{}) error {
 }
 
 func (mythic *Mythic) CreateNewAPIToken() error {
-    response, _ := mythic.GraphqlPost(CreateAPITokenMutation, map[string]interface{}{})
-    
-    // Add a type assertion to convert the interface{} to map[string]interface{}
-    newToken, ok := response.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("response is not a map[string]interface{}")
-	}
+	transport, serverURL := mythic.GetHTTPTransport()
+	client := graphql.NewClient(serverURL, &http.Client{Transport: transport})
 
-	createAPIToken, ok := newToken["createAPIToken"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("createAPIToken is not a map[string]interface{}")
+	var response CreateAPITokenMutation
+	err := client.Query(context.Background(), &response, map[string]interface{}{})
+	if err != nil {
+		return err
 	}
+	
 
-	if statusData := createAPIToken; statusData["status"].(string) == "success" {
-		mythic.APIToken = statusData["token_value"].(string)
+	if response.CreateAPIToken.Status.Equals("completed") {
+		mythic.APIToken = response.CreateAPIToken.TokenValue
 	} else {
-		errMsg := statusData["error"].(string)
+		errMsg := response.CreateAPIToken.Error
 		err := fmt.Errorf("Failed to get or generate an API token to use from Mythic\n%s", errMsg)
 		log.Printf("[-] Failed to authenticate to Mythic: \n%s", err)
 		return err
 	}
 
-    return nil
+	return nil
 }
 
-func getWebSocketTransport(serverIP string, serverPort int, path string) (*websocket.Conn, error) {
-    u := url.URL{Scheme: "ws", Host: fmt.Sprintf("%s:%d", serverIP, serverPort), Path: path}
-    c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+
+
+
+
+func (m *Mythic) getWebSocketTransport(path string) (*websocket.Conn, error) {
+    u := url.URL{Scheme: "wss", Host: fmt.Sprintf("%s:%d", m.ServerIP, m.ServerPort), Path: path}
+
+    headers := m.GetHeaders()
+    options := websocket.DialOptions{
+        Subprotocols: []string{"graphql-ws"},
+        HTTPHeader:   headers,
+    }
+
+    ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+    defer cancel()
+
+    c, _, err := websocket.Dial(ctx, u.String(), &options)
     if err != nil {
         return nil, err
     }
     return c, nil
 }
+
+func structToMap(obj interface{}) map[string]interface{} {
+    out := make(map[string]interface{})
+    v := reflect.ValueOf(obj)
+
+    // If pointer get the underlying element≤
+    if v.Kind() == reflect.Ptr {
+        v = v.Elem()
+    }
+
+    for i := 0; i < v.NumField(); i++ {
+        field := v.Type().Field(i)
+        value := v.Field(i).Interface()
+        out[field.Name] = value
+    }
+
+    return out
+}
+
+
+
