@@ -15,9 +15,9 @@ import (
 	"strconv"
 	"context"
 	"reflect"
-	
 	"github.com/hasura/go-graphql-client"
-	"nhooyr.io/websocket"
+	"github.com/hasura/go-graphql-client/pkg/jsonutil"
+	"github.com/gorilla/websocket"
 
 )
 
@@ -287,55 +287,169 @@ func (m *Mythic) HttpGetChunked(url string, chunkSize int) (<-chan []byte, error
 }
 
 
-func (m *Mythic) GraphQLSubscription(subscription interface{}, variables map[string]interface{}, timeout int) (<-chan *TaskWaitForStatusSubscription, error) {
+func (m *Mythic) newWebsocketConn(sc *graphql.SubscriptionClient) (graphql.WebsocketConn, error) {
     var endpoint = "/graphql/"
-    
+    log.Println("newWebsocketConn endpoint:", endpoint)
+
+    headers := m.GetHeaders()
+    log.Println("newWebsocketConn headers:", headers)
+
     // Prepare the client
-    client := graphql.NewSubscriptionClient(endpoint).
-        WithConnectionParams(HeaderToMap(m.GetHeaders())).
-        WithTimeout(time.Duration(timeout) * time.Second).
-        WithWebSocket(func(sc *graphql.SubscriptionClient) (graphql.WebsocketConn, error) {
-            conn, err := m.getWebSocketTransport(endpoint)
-            if err != nil {
-                return nil, err
-            }
-
-            return &graphql.WebsocketHandler{
-                Conn: conn,
-            }, nil
-        })
-
-	// Create a channel to receive responses
-    events := make(chan *TaskWaitForStatusSubscription)
-
-    // Subscribe with the prepared request
-    _, err := client.Subscribe(subscription, variables, func(data []byte, err error) error {
-        if err != nil {
-            log.Println("Error in GraphQL subscription:", err)
-            return err
-        }
-
-        var event TaskWaitForStatusSubscription
-        if err := json.Unmarshal(data, &event); err != nil {
-            log.Println("Error parsing GraphQL subscription event:", err)
-            return err
-        }
-
-        events <- &event
-        return nil
-    })
-
+    client, err := m.getWebSocketTransport(endpoint)
     if err != nil {
         return nil, err
     }
 
-    // Run the client in a separate goroutine
-    go func() {
-        client.Run()
-    }()
-
-    return events, nil
+    return &MythicWebSocketHandler{
+        Conn:    client,
+        timeout: sc.GetTimeout(),
+    }, nil
 }
+
+type MythicWebSocketHandler struct {
+    Conn    *websocket.Conn
+    timeout time.Duration
+}
+
+func (h *MythicWebSocketHandler) ReadJSON(v interface{}) error {
+    return h.Conn.ReadJSON(v)
+}
+
+func (h *MythicWebSocketHandler) WriteJSON(v interface{}) error {
+    return h.Conn.WriteJSON(v)
+}
+
+func (h *MythicWebSocketHandler) Close() error {
+    return h.Conn.Close()
+}
+
+func (h *MythicWebSocketHandler) SetReadLimit(limit int64) {
+    h.Conn.SetReadLimit(limit)
+}
+
+func (h *MythicWebSocketHandler) GetCloseStatus(err error) int32 {
+    // You can modify this to return the actual close status if possible
+    return 1000  // Normal closure status
+}
+
+
+
+func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface{}, variables map[string]interface{}, timeout int) (<-chan *TaskWaitForStatusSubscription, error) {
+    var endpoint = "/graphql/"
+    log.Println("GraphQLSubscription endpoint:", endpoint)
+
+    // Convert headers to map[string]interface{}
+    headersMap := make(map[string]interface{})
+    for key, values := range m.GetHeaders() {
+        if len(values) > 0 {
+            headersMap[key] = values[0]
+        }
+    }
+
+    log.Println("GraphQLSubscription headers:", headersMap)
+	
+    // Marshal the subscription into JSON
+    jsonQuery, err := json.Marshal(subscription)
+    if err != nil {
+        log.Printf("Error marshaling subscription: %v", err)
+        return nil, err
+    }
+
+    // Marshal the variables into JSON
+    jsonVariables, err := json.Marshal(variables)
+    if err != nil {
+        log.Printf("Error marshaling variables: %v", err)
+        return nil, err
+    }
+
+    // Log the subscription and variables
+    log.Printf("GraphQL subscription: %s", string(jsonQuery))
+    log.Printf("GraphQL variables: %s", string(jsonVariables))
+
+    // Prepare the client
+    client := graphql.NewSubscriptionClient(endpoint).
+        WithConnectionParams(headersMap).
+        WithTimeout(time.Duration(timeout) * time.Second).
+        WithWebSocket(m.newWebsocketConn)
+		
+    log.Printf("DEBUG: Starting subscription with the following parameters:\nSubscription: %+v\nVariables: %+v\nTimeout: %v", subscription, variables, timeout)
+
+    // Create a channel to receive responses
+    events := make(chan *TaskWaitForStatusSubscription)
+	
+	ctx, cancel := context.WithCancel(context.Background())
+	
+	handleResult := func(data []byte, err error) error {
+		if err != nil {
+			log.Println("Error in GraphQL subscription:", err)
+			return err
+		}
+
+		var event TaskWaitForStatusSubscription
+		log.Println("DEBUG: Received JSON data: ", string(data)) // add this line
+
+		err = jsonutil.UnmarshalGraphQL(data, &event)
+		if err != nil {
+			log.Println("Error parsing GraphQL subscription event:", err)
+			close(events) // close the events channel
+			return err
+		}
+
+		log.Printf("Unmarshalled data into struct: %+v\n", event)
+		log.Println("DEBUG: Received event data: ", string(data))
+
+		events <- &event
+
+		// Close the events channel if the task is completed
+		for _, task := range event.TaskStream {
+			log.Printf("Received event: %+v", event)
+			if task.Status == "completed" {
+				close(events)
+				cancel()
+				return nil
+			}
+		}
+
+		return nil
+	}
+
+
+
+    // Subscribe with the prepared request
+    subscriptionId, err := client.Subscribe(subscription, variables, handleResult)
+
+	if err != nil {
+		log.Println("Error in GraphQL subscription:", err)
+		return nil, err
+	}
+
+
+    // Run the client in a separate goroutine
+	go func() {
+		defer close(events)
+
+		running := true
+		for running {
+			select {
+			case <-ctx.Done():
+				client.Unsubscribe(subscriptionId) // unsubscribe when context is done
+				running = false
+			default:
+				client.Run()
+			}
+		}
+	}()
+
+	return events, nil
+
+}
+
+
+
+
+
+
+
 
 
 func (m *Mythic) FetchGraphQLSchema() (string, error) {
@@ -520,21 +634,31 @@ func (mythic *Mythic) CreateNewAPIToken() error {
 func (m *Mythic) getWebSocketTransport(path string) (*websocket.Conn, error) {
     u := url.URL{Scheme: "wss", Host: fmt.Sprintf("%s:%d", m.ServerIP, m.ServerPort), Path: path}
 
-    headers := m.GetHeaders()
-    options := websocket.DialOptions{
-        Subprotocols: []string{"graphql-ws"},
-        HTTPHeader:   headers,
+    dialer := websocket.Dialer{
+        HandshakeTimeout:  time.Minute,
+        Subprotocols:      []string{"graphql-ws"},
+        TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
+        EnableCompression: true,
     }
 
-    ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-    defer cancel()
+    headers := http.Header{}
+    for key, value := range m.GetHeaders() {
+        headers.Add(key, value[0])
+    }
 
-    c, _, err := websocket.Dial(ctx, u.String(), &options)
+    c, _, err := dialer.Dial(u.String(), headers)
     if err != nil {
         return nil, err
     }
+
     return c, nil
 }
+
+
+
+
+
+
 
 func structToMap(obj interface{}) map[string]interface{} {
     out := make(map[string]interface{})

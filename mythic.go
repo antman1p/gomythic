@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"encoding/json"
 	"time"
+	"context"
 )
 
 func Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
@@ -194,41 +195,66 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
     var subscription TaskWaitForStatusSubscription
 
     variables := TaskWaitForStatusSubscriptionVariables{
-        TaskDisplayID: taskDisplayID,
+        DisplayID: taskDisplayID,
     }
+
+    //DEBUG
+    log.Printf("DEBUG: taskDisplayID: %v", taskDisplayID)
 
     variableMap := structToMap(variables)
+    log.Printf("Variable Map: %+v", variableMap)
 
-    results, err := m.GraphQLSubscription(&subscription, variableMap, *timeout)
+    log.Printf("Subscribing to task updates with variables: %+v", variableMap)
+
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    results, err := m.GraphQLSubscription(ctx, &subscription, variableMap, *timeout)
     if err != nil {
+        log.Printf("Error subscribing to task updates: %v", err)
         return nil, err
     }
+	
+	log.Printf("Received results from GraphQLSubscription: %+v", results) // add this line
+
 
     start := time.Now()
     for result := range results {
-        elapsed := time.Since(start)
-        log.Printf("Waited for %v", elapsed)
+        for _, taskFragment := range result.TaskStream {
+            log.Printf("DEBUG: Checking task update results: %+v", taskFragment)
+            log.Printf("DEBUG: Task status: %s\n", taskFragment.Status)
 
-        if result.TaskStream.Status.Equals("error") || result.TaskStream.Status.Equals("completed") { // comparing with int values
-            taskResult := &CreateTaskMutation{
-                CreateTask: struct {
-                    Status    MythicStatus    `graphql:"status"`
-                    ID        int `graphql:"id"`
-                    DisplayID int `graphql:"display_id"`
-                    Error     string `graphql:"error"` // assign the Error value here
-                } {
-                    Status:    result.TaskStream.Status,
-                    ID:        result.TaskStream.ID,
-                    DisplayID: result.TaskStream.DisplayID,
-                    Error:     "", // this is a placeholder. Please replace this with the actual Error field from your result.TaskStream if it exists
-                },
+            elapsed := time.Since(start)
+            log.Printf("Waited for %v", elapsed)
+
+            log.Printf("Received task update: %+v", taskFragment)
+
+            if taskFragment.Status.Equals("error") || taskFragment.Status.Equals("completed") {
+                taskResult := &CreateTaskMutation{
+                    CreateTask: struct {
+                        Status    MythicStatus `graphql:"status"`
+                        ID        int `graphql:"id"`
+                        DisplayID int `graphql:"display_id"`
+                        Error     string `graphql:"error"` // assign the Error value here
+                    } {
+                        Status:    taskFragment.Status,
+                        ID:        taskFragment.ID,
+                        DisplayID: taskFragment.DisplayID,
+                        Error:     "", // this is a placeholder. Please replace this with the actual Error field from your taskFragment if it exists
+                    },
+                }
+                
+                log.Printf("Task completed with status: %s", taskResult.CreateTask.Status)
+                return taskResult, nil
             }
-            return taskResult, nil
         }
     }
 
+    log.Printf("Task did not complete within the given timeout")
     return nil, fmt.Errorf("task not completed")
 }
+
+
 
 
 

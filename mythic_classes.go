@@ -19,6 +19,33 @@ type Mythic struct {
 	Schema             string `json:"schema"`
 }
 
+/* CreateTaskMutation = `
+		mutation createTasking(
+			$callback_id: Int!,
+			$command: String!,
+			$params: String!,
+			$token_id: Int,
+			$tasking_location: String,
+			$original_params: String,
+			$parameter_group_name: String
+		) {
+			createTask(
+				callback_id: $callback_id,
+				command: $command,
+				params: $params,
+				token_id: $token_id,
+				tasking_location: $tasking_location,
+				original_params: $original_params,
+				parameter_group_name: $parameter_group_name
+			) {
+				status
+				id
+				display_id
+				error
+			}
+		}
+	` */
+
 type CreateTaskMutation struct {
 	CreateTask struct {
 		Status    MythicStatus `graphql:"status"`
@@ -72,6 +99,32 @@ type ActiveCallbackQuery struct {
 	Callback []Callback `graphql:"callback(where: {active: {_eq: true}}, order_by: {id: asc})"`
 }
 
+/* TaskFragment = `
+		fragment task_fragment on task {
+			callback {
+				id
+				display_id
+			}
+			id
+			display_id
+			operator {
+				username
+			}
+			status
+			completed
+			original_params
+			display_params
+			timestamp
+			command_name
+			tasks {
+				id
+			}
+			token {
+				token_id
+			}
+		}
+	` */
+
 type TaskFragment struct {
 	Callback struct {
 		ID         int    `graphql:"id"`
@@ -96,6 +149,37 @@ type TaskFragment struct {
 	} `graphql:"token"`
 }
 
+
+/* TaskOutputFragment = `
+		fragment task_output_fragment on response {
+			id
+			timestamp
+			response_text
+			task {
+				id
+				display_id
+				status
+				completed
+				agent_task_id
+				command_name
+			}
+		}
+	` */
+	
+type TaskOutputFragment struct {
+	ID            int    `graphql:"id"`
+	Timestamp     string `graphql:"timestamp"`
+	ResponseText  string `graphql:"response_text"`
+	Task struct {
+		ID		    int                 `graphql:"id"`
+		DisplayID   int		            `graphql:"display_id"`
+		Status	    MythicStatus	    `graphql:"status"`
+		Completed   bool		        `graphql:"completed"`
+		AgentTaskID	int	                `graphql:"agent_task_id"`
+		CommandName	string	            `graphql:"command_name"`
+	} `graphql:"task"`
+}
+
 type TaskQuery struct {
 	Task []TaskFragment `graphql:"task(order_by: {id: desc})"`
 }
@@ -105,12 +189,36 @@ type TaskQueryWithCallback struct {
 }
 
 type TaskWaitForStatusSubscription struct {
-    TaskStream TaskFragment `graphql:"task_stream(cursor: {initial_value: {timestamp: \"1970-01-01\"}}, batch_size: 1, where: {display_id: {_eq: $task_display_id}})"`
+    TaskStream []TaskFragment `graphql:"task_stream(cursor: {initial_value: {timestamp: \"1970-01-01\"}}, batch_size: 1, where: {display_id: {_eq: $DisplayID}})"`
 }
 
+
 type TaskWaitForStatusSubscriptionVariables struct {
-    TaskDisplayID int `json:"task_display_id"`
+    DisplayID int `graphql:"display_id"`
 }
+
+	/* CreateAPITokenMutation = `
+		mutation createAPITokenMutation {
+			createAPIToken(token_type: "User") {
+				id
+				token_value
+				status
+				error
+				operator_id
+			}
+		}
+	`
+
+	GetAPITokensQuery = `
+		query GetAPITokens {
+			apitokens(where: {active: {_eq: true}}) {
+				token_value
+				active
+				id
+			}
+		}
+	` */
+
 
 type CreateAPITokenMutation struct {
 	CreateAPIToken CreateAPIToken `graphql:"createAPIToken(token_type: \"User\")"`

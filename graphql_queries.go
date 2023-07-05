@@ -230,22 +230,6 @@ var (
 		}
 	`
 
-	TaskOutputFragment = `
-		fragment task_output_fragment on response {
-			id
-			timestamp
-			response_text
-			task {
-				id
-				display_id
-				status
-				completed
-				agent_task_id
-				command_name
-			}
-		}
-	`
-
 	PayloadDataFragment = `
 		fragment payload_data_fragment on payload {
 			build_message
