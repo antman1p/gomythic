@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"time"
 	"context"
+	"encoding/base64"
 )
 
 func Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
@@ -52,6 +53,10 @@ func Login(serverIP string, serverPort int, username, password, apiToken string,
 	return nil
 } */
 
+// func (m *Mythic) SubscribeCustomQuery(query string, variables map[string]interface{}, timeout int) error { }
+
+
+
 // # ########### Callback Functions #############
 
 // CallbackAttributes represents the returned data structure of a callback
@@ -84,7 +89,15 @@ func (m *Mythic) GetAllActiveCallbacks() ([]Callback, error) {
 	return query.Callback, nil
 }
 
+//TODO:
+// func (m *Mythic) SubscribeNewCallbacks(batchSize int, timeout int) ([]Callback, error){}
 
+// func (m *Mythic) SubscribeAllActiveCallbacks(timeout int) ([]Callback, error){}
+
+/* func (m *Mythic) UpdateCallback(callbackDisplayID *int, active bool, sleepInfo string, locaked bool, description string,
+	ips []string, user string, host string, os string, architecture string, extraInfo string, pid int, processName string,
+	integrityLevel int, domain string) ([]Callback, error){}
+*/
 
 // ############ Task Functions #################
 
@@ -108,10 +121,6 @@ func (m *Mythic) GetAllTasks(callbackDisplayID *int) ([]TaskFragment, error) {
 		return query.Task, nil
 	}
 }
-
-
-
-
 
 
 func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackDisplayID int, tokenID *int, originalParams interface{}, parameterGroupName interface{}, waitForComplete bool, timeout *int) (*CreateTaskMutation, error) {
@@ -143,8 +152,6 @@ func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackD
 		"tasking_location":        taskingLocation,
 	}
 	
-
-	
 	if tokenID != nil {
     variables["token_id"] = *tokenID
 	} else {
@@ -163,7 +170,6 @@ func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackD
 		variables["parameter_group_name"] = ""
 	}
 
-	
 	err := m.GraphqlPost(&query, variables, "mutation")
 	if err != nil {
 		return nil, err
@@ -189,8 +195,6 @@ func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackD
 }
 
 
-
-
 func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *string, timeout *int) (*CreateTaskMutation, error) {
     var subscription TaskWaitForStatusSubscription
 
@@ -198,13 +202,7 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
         DisplayID: taskDisplayID,
     }
 
-    //DEBUG
-    log.Printf("DEBUG: taskDisplayID: %v", taskDisplayID)
-
     variableMap := structToMap(variables)
-    log.Printf("Variable Map: %+v", variableMap)
-
-    log.Printf("Subscribing to task updates with variables: %+v", variableMap)
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
@@ -215,15 +213,17 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
         return nil, err
     }
 	
-	log.Printf("Received results from GraphQLSubscription: %+v", results) // add this line
-
+    log.Printf("Received results from GraphQLSubscription: %+v", results) // add this line
 
     start := time.Now()
     for result := range results {
-        for _, taskFragment := range result.TaskStream {
-            log.Printf("DEBUG: Checking task update results: %+v", taskFragment)
-            log.Printf("DEBUG: Task status: %s\n", taskFragment.Status)
+        // Here we are asserting that the result is of type *TaskWaitForStatusSubscription
+        resultAssertion, ok := result.(*TaskWaitForStatusSubscription)
+        if !ok {
+            return nil, fmt.Errorf("unexpected type from results channel")
+        }
 
+        for _, taskFragment := range resultAssertion.TaskStream {
             elapsed := time.Since(start)
             log.Printf("Waited for %v", elapsed)
 
@@ -249,13 +249,197 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
             }
         }
     }
-
     log.Printf("Task did not complete within the given timeout")
     return nil, fmt.Errorf("task not completed")
 }
 
 
 
+func (m *Mythic) IssueTaskAndWaitForOutput(commandName string, parameters interface{}, callbackDisplayId int, tokenId int, originalParams interface{}, parameterGroupName interface{}, waitForComplete bool, timeout int) ([]byte, error) {
+	tokenIdPtr := &tokenId
+	task, err := m.IssueTask(commandName, parameters, callbackDisplayId, tokenIdPtr, originalParams, parameterGroupName, true, &timeout)
+	if err != nil {
+		return nil, err
+	}
+	
+	taskDisplayId := task.CreateTask.DisplayID
+	if taskDisplayId == 0 {
+		return nil, fmt.Errorf("invalid task display id")
+	}
+
+	return m.WaitForTaskOutput(taskDisplayId, &timeout)
+}
+
+
+// TODO:
+
+// func (m *Mythic) IssueTaskAllActiveCallbacks(commandName string, parameters interface{}) ([]byte, error) {}
+
+// func (m *Mythic) SubscribeNewTasks(batchSize int, timeout int, callbackDisplayId int) ([]byte, error) {}
+
+// func (m *Mythic) SubscribeNewTasksAndUpdates(batchSize int, timeout int, callbackDisplayId int) ([]byte, error) {}
+
+// func (m *Mythic) SubscribeAllTasks(timeout int, callbackDisplayId int) ([]byte, error) {}
+
+// func (m *Mythic) SubscribeAllTasksAndUpdates(timeout int, callbackDisplayId int) ([]byte, error) {}
+
+// func (m *Mythic) AddMitreAttackToTask(timeout int, taskDisplayID int, MitreAttackNumbers []string ) ([]byte, error) {}
+
+
+
+
+
+// # ######### File Browser Functions ###########
+
+
+
+// # ######### Command Functions ##############
+
+
+
+// # ######### Payload Functions ##############
+
+
+
+// # ######### Task Output Functions ###########
+
+
+func (m *Mythic) WaitForTaskOutput(taskDisplayID int, timeout *int) ([]byte, error) {
+    var subscription TaskWaitForOutputSubscription
+
+    variables := TaskWaitForOutputSubscriptionVariables{
+        DisplayID: taskDisplayID,
+    }
+    variableMap := structToMap(variables)
+
+    ctx, cancel := context.WithTimeout(context.Background(), time.Second*10) // Set timeout to 10 seconds
+    defer cancel() // Make sure to cancel the context when we're done to free resources
+
+    events, err := m.GraphQLSubscription(ctx, &subscription, variableMap, *timeout)
+    if err != nil {
+        log.Printf("Error subscribing to task updates: %v", err)
+        return nil, err
+    }
+
+    finalOutput := make([]byte, 0)
+
+    for {
+        select {
+        case event := <-events:
+            v, ok := event.(*TaskWaitForOutputSubscription)
+            if !ok {
+                return nil, fmt.Errorf("unexpected type: %T", event)
+            }
+            for _, taskStream := range v.TaskStream {
+                for _, response := range taskStream.Responses {
+                    outputBytes, err := base64.StdEncoding.DecodeString(response.ResponseText)
+                    if err != nil {
+                        return nil, fmt.Errorf("failed to decode base64 response text: %v", err)
+                    }
+                    finalOutput = append(finalOutput, outputBytes...)
+                }
+            }
+        case <-ctx.Done():
+            return finalOutput, nil // Return what we've collected so far after timeout
+        }
+    }
+
+    // Add handling for subtask output here if needed
+
+    return finalOutput, nil
+}
+
+
+
+func (m *Mythic) GetAllSubtaskIDs(taskDisplayID int, fetchDisplayIDInstead bool) ([]int, error) {
+	
+	type TaskIdFromDisplayID struct {
+		Task []struct {
+			ID int `graphql:"id"`
+		} `graphql:"task(where: {parent_task_id: {_eq: $task_id}})"`
+	}
+	
+	type SubtaskList struct {
+		Task []struct {
+			ID         int `graphql:"id"`
+			DisplayID int `graphql:"display_id"`
+		} `graphql:"task(where: {parent_task_id: {_eq: $task_id}})"`
+	}
+	
+	variables := map[string]interface{}{
+		"task_id": taskDisplayID,
+	}
+
+	var initial TaskIdFromDisplayID
+	if err := m.GraphqlPost(&initial, variables, "query"); err != nil {
+		return nil, err
+	}
+
+	subtaskIds := []int{}
+	taskIdsToCheck := []int{}
+	if len(initial.Task) > 0 {
+		taskIdsToCheck = append(taskIdsToCheck, initial.Task[0].ID)
+	}
+
+	for len(taskIdsToCheck) > 0 {
+		currentTaskId := taskIdsToCheck[len(taskIdsToCheck)-1]
+		taskIdsToCheck = taskIdsToCheck[:len(taskIdsToCheck)-1]
+
+		variables["task_id"] = currentTaskId  // update the 'task_id' in variables map
+		
+		var subtasks SubtaskList
+		if err := m.GraphqlPost(&subtasks, variables, "query"); err != nil {
+			return nil, err
+		}
+
+		for _, t := range subtasks.Task {
+			taskIdsToCheck = append(taskIdsToCheck, t.ID)
+			if fetchDisplayIDInstead {
+				subtaskIds = append(subtaskIds, t.DisplayID)
+			} else {
+				subtaskIds = append(subtaskIds, t.ID)
+			}
+		}
+	}
+
+	return subtaskIds, nil
+}
+
+
+func (m *Mythic) GetAllTaskOutputByID(taskDisplayID int) ([]TaskOutputFragment, error) {
+	var taskOutput TaskOutput
+	
+	variables := map[string]interface{}{
+		"task_display_id": taskDisplayID,
+	}
+	err := m.GraphqlPost(&taskOutput, variables, "query")
+	if err != nil {
+		return nil, err
+	}
+
+	return taskOutput.Response, nil
+}
+
+
+// TODO:
+
+// # ########## Operator Functions ##############
+
+// # ########## File Functions ##############
+
+// # ########## Operations Functions #############
+
+// # ############ Process Functions ##############
+
+// # ####### Analytic-based Functions ############
+
+// # ####### Event Feed functions ############
+
+// # ####### webhook ############
+
+// # ####### C2 Functions #############
+
+// # ####### Tag Functions ############
 
 
 

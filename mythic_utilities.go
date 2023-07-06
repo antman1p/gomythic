@@ -334,7 +334,7 @@ func (h *MythicWebSocketHandler) GetCloseStatus(err error) int32 {
 
 
 
-func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface{}, variables map[string]interface{}, timeout int) (<-chan *TaskWaitForStatusSubscription, error) {
+func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface{}, variables map[string]interface{}, timeout int) (<-chan interface{}, error) {
     var endpoint = "/graphql/"
     log.Println("GraphQLSubscription endpoint:", endpoint)
 
@@ -375,45 +375,60 @@ func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface
     log.Printf("DEBUG: Starting subscription with the following parameters:\nSubscription: %+v\nVariables: %+v\nTimeout: %v", subscription, variables, timeout)
 
     // Create a channel to receive responses
-    events := make(chan *TaskWaitForStatusSubscription)
+    events := make(chan interface{})
 	
-	ctx, cancel := context.WithCancel(context.Background())
+    ctx, cancel := context.WithCancel(context.Background())
 	
-	handleResult := func(data []byte, err error) error {
-		if err != nil {
-			log.Println("Error in GraphQL subscription:", err)
-			return err
-		}
+    handleResult := func(data []byte, err error) error {
+        if err != nil {
+            log.Println("Error in GraphQL subscription:", err)
+            return err
+        }
 
-		var event TaskWaitForStatusSubscription
-		log.Println("DEBUG: Received JSON data: ", string(data)) // add this line
+        log.Println("DEBUG: Received JSON data: ", string(data)) // add this line
 
-		err = jsonutil.UnmarshalGraphQL(data, &event)
-		if err != nil {
-			log.Println("Error parsing GraphQL subscription event:", err)
-			close(events) // close the events channel
-			return err
-		}
+        switch v := subscription.(type) {
+        case *TaskWaitForStatusSubscription:
+			log.Printf("Subscription is of type: %T\n", v)
+            var event TaskWaitForStatusSubscription
+            err = jsonutil.UnmarshalGraphQL(data, &event)
+            if err != nil {
+                log.Println("Error parsing GraphQL subscription event:", err)
+                close(events) // close the events channel
+                return err
+            }
+            events <- &event
 
-		log.Printf("Unmarshalled data into struct: %+v\n", event)
-		log.Println("DEBUG: Received event data: ", string(data))
+            // Close the events channel if the task is completed
+            for _, task := range event.TaskStream {
+                log.Printf("Received event: %+v", event)
+                if task.Status == "completed" {
+                    close(events)
+                    cancel()
+                    return nil
+                }
+            }
+        case *TaskWaitForOutputSubscription:
+			log.Printf("Subscription is of type: %T\n", v)
+            var event TaskWaitForOutputSubscription
+			log.Printf("Received raw data: %s", string(data))
+			log.Printf("Parsed event: %+v", event)
+            err = jsonutil.UnmarshalGraphQL(data, &event)
+            if err != nil {
+                log.Println("Error parsing GraphQL subscription event:", err)
+                close(events) // close the events channel
+                return err
+            }
+            events <- &event
 
-		events <- &event
+            // you might need to handle task completion logic for this event type here
+        // case more subscription types as needed
+        default:
+            return fmt.Errorf("unsupported subscription type")
+        }
 
-		// Close the events channel if the task is completed
-		for _, task := range event.TaskStream {
-			log.Printf("Received event: %+v", event)
-			if task.Status == "completed" {
-				close(events)
-				cancel()
-				return nil
-			}
-		}
-
-		return nil
-	}
-
-
+        return nil
+    }
 
     // Subscribe with the prepared request
     subscriptionId, err := client.Subscribe(subscription, variables, handleResult)
@@ -538,13 +553,7 @@ func (mythic *Mythic) AuthenticateToMythic() error {
 func (mythic *Mythic) HandleAPITokens() error {
 	log.Printf("Sending GraphqlPost request...\n") 
 
-	var query struct {
-		APITokens []struct {
-			TokenValue string `graphql:"token_value"`
-			Active     bool
-			ID         int
-		} `graphql:"apitokens(where: {active: {_eq: true}})"`
-	}
+	var query GetAPITokensQuery
 
 	err := mythic.GraphqlPost(&query, map[string]interface{}{}, "query")
 	if err != nil {
