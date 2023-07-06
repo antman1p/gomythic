@@ -291,14 +291,27 @@ func (m *Mythic) IssueTaskAndWaitForOutput(commandName string, parameters interf
 
 // # ######### File Browser Functions ###########
 
+//func (m *Mythic) GetAllFileBrowser(host string, batchSize int) ([]byte, error) {}
+
+//func (m *Mythic) SubscribeNewFileBrowser(host string, batchSize int, timeout int) ([]byte, error) {}
+
+//func (m *Mythic) SubscribeAllFileBrowser(host string, timeout int, batchSize int) ([]byte, error) {}
+
+
 
 
 // # ######### Command Functions ##############
+
+// func (m *Mythic) GetAllCommandsForPayloadType(payloadTypeName string) ([]byte, error) {}
 
 
 
 // # ######### Payload Functions ##############
 
+/* func (m *Mythic) CreatePayload(payloadTypeName string, filename string, operatingSystem string, c2Profiles interface{}, commands []string, 
+	buildParameters interface{}, description string, returnOnComplete bool, timeout int, includeAllCommands bool) ([]byte, error) {}
+
+*/
 
 
 // # ######### Task Output Functions ###########
@@ -363,8 +376,6 @@ func (m *Mythic) WaitForTaskOutput(taskDisplayID int, timeout *int) ([]byte, err
         }
     }
 }
-
-
 
 
 func (m *Mythic) GetAllSubtaskIDs(taskDisplayID int, fetchDisplayIDInstead bool) ([]int, error) {

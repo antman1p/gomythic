@@ -199,16 +199,19 @@ type TaskWaitForStatusSubscriptionVariables struct {
 
 
 type CreateAPITokenMutation struct {
-	CreateAPIToken CreateAPIToken `graphql:"createAPIToken(token_type: \"User\")"`
+	CreateAPIToken struct {
+		ID         int    `graphql:"id"`
+		TokenValue string `graphql:"token_value"`
+		Status     string `graphql:"status"`
+		Error      string `graphql:"error"`
+		OperatorID int    `graphql:"operator_id"`
+	} `graphql:"createAPIToken(token_type: $token_type)"`
 }
 
-type CreateAPIToken struct {
-	ID         int    `graphql:"id"`
-	TokenValue string `graphql:"token_value"`
-	Status     MythicStatus     `graphql:"status"`
-	Error      string `graphql:"error"`
-	OperatorID int    `graphql:"operator_id"`
+type CreateAPITokenVariables struct {
+	TokenType string `graphql:"token_type"`
 }
+
 
 /*	GetAPITokensQuery = `
 		query GetAPITokens {

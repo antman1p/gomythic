@@ -123,9 +123,9 @@ func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]i
 func (m *Mythic) GetHeaders() http.Header {
 	headers := http.Header{}
 	if m.APIToken != "" {
-		headers.Set("apitoken", m.APIToken)
-	} else if m.AccessToken != ""{
-		headers.Set("Authorization", "Bearer "+m.AccessToken)
+		headers.Set("Apitoken", strings.TrimSpace(m.APIToken))
+	} else if m.AccessToken != "" {
+		headers.Set("Authorization", "Bearer "+strings.TrimSpace(m.AccessToken))
 	}
 
 	return headers
@@ -613,19 +613,30 @@ func (mythic *Mythic) HandleExistingAPIToken(apitokens []interface{}) error {
 	return nil
 }
 
-func (mythic *Mythic) CreateNewAPIToken() error {
-	transport, serverURL := mythic.GetHTTPTransport()
-	client := graphql.NewClient(serverURL, &http.Client{Transport: transport})
+func (m *Mythic) CreateNewAPIToken() error {
 
+	variables := CreateAPITokenVariables{
+		TokenType: "User",
+	}
+	
+	variableMap := map[string]interface{}{
+		"token_type": variables.TokenType,
+	}
+	
 	var response CreateAPITokenMutation
-	err := client.Query(context.Background(), &response, map[string]interface{}{})
+	err := m.GraphqlPost(&response, variableMap, "mutation")
 	if err != nil {
+		log.Printf("[-] Failed to execute mutation: \n%s", err)
 		return err
 	}
 	
+	//DEBUG
+	log.Printf("[+] Response from server: %#v", response)
 
-	if response.CreateAPIToken.Status.Equals("completed") {
-		mythic.APIToken = response.CreateAPIToken.TokenValue
+	
+
+	if response.CreateAPIToken.Status == "success" {
+		m.APIToken = response.CreateAPIToken.TokenValue
 	} else {
 		errMsg := response.CreateAPIToken.Error
 		err := fmt.Errorf("Failed to get or generate an API token to use from Mythic\n%s", errMsg)
