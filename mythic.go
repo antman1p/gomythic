@@ -7,6 +7,12 @@ import (
 	"time"
 	"context"
 	"encoding/base64"
+	"strings"
+	"errors"
+	"net/http"
+	
+	"github.com/hasura/go-graphql-client"
+
 )
 
 func Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
@@ -29,29 +35,30 @@ func Login(serverIP string, serverPort int, username, password, apiToken string,
 }
 
 
-/* func (m *Mythic) ExecuteCustomQuery(query string, variables map[string]interface{}) error {
+func (m *Mythic) ExecuteCustomQuery(query string, variables map[string]interface{}, result interface{}) error {
 	// Check if the query string is empty
 	if strings.TrimSpace(query) == "" {
 		return errors.New("query string is empty")
 	}
 
 	// Get the endpoint and http.Client
-	endpoint, httpClient := m.GetHTTPTransport()
+	transport, serverURL := m.GetHTTPTransport()
 
 	// Create a new client
-	client := graphql.NewClient(endpoint, httpClient)
+	client := graphql.NewClient(serverURL, &http.Client{Transport: transport})
 
 	ctx := context.Background()
 
 	// Execute the query
-	err = client.Exec(ctx, query, nil, variables)
+	err := client.Exec(ctx, query, result, variables)
 	if err != nil {
 		log.Printf("Hit an exception within ExecuteCustomQuery: %v", err)
 		return err
 	}
 
 	return nil
-} */
+}
+
 
 // func (m *Mythic) SubscribeCustomQuery(query string, variables map[string]interface{}, timeout int) error { }
 
