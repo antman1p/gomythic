@@ -107,8 +107,6 @@ func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]i
         return nil, err
     }
 
-    log.Printf("Response body: %s\n", responseData)  // log the response body DEBUG
-
     var response map[string]interface{}
     err = json.Unmarshal(responseData, &response)
     if err != nil {
@@ -289,11 +287,7 @@ func (m *Mythic) HttpGetChunked(url string, chunkSize int) (<-chan []byte, error
 
 func (m *Mythic) newWebsocketConn(sc *graphql.SubscriptionClient) (graphql.WebsocketConn, error) {
     var endpoint = "/graphql/"
-    log.Println("newWebsocketConn endpoint:", endpoint)
-
-    headers := m.GetHeaders()
-    log.Println("newWebsocketConn headers:", headers)
-
+	
     // Prepare the client
     client, err := m.getWebSocketTransport(endpoint)
     if err != nil {
@@ -336,7 +330,6 @@ func (h *MythicWebSocketHandler) GetCloseStatus(err error) int32 {
 
 func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface{}, variables map[string]interface{}, timeout int) (<-chan interface{}, error) {
     var endpoint = "/graphql/"
-    log.Println("GraphQLSubscription endpoint:", endpoint)
 
     // Convert headers to map[string]interface{}
     headersMap := make(map[string]interface{})
@@ -345,26 +338,7 @@ func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface
             headersMap[key] = values[0]
         }
     }
-
-    log.Println("GraphQLSubscription headers:", headersMap)
 	
-    // Marshal the subscription into JSON
-    jsonQuery, err := json.Marshal(subscription)
-    if err != nil {
-        log.Printf("Error marshaling subscription: %v", err)
-        return nil, err
-    }
-
-    // Marshal the variables into JSON
-    jsonVariables, err := json.Marshal(variables)
-    if err != nil {
-        log.Printf("Error marshaling variables: %v", err)
-        return nil, err
-    }
-
-    // Log the subscription and variables
-    log.Printf("GraphQL subscription: %s", string(jsonQuery))
-    log.Printf("GraphQL variables: %s", string(jsonVariables))
 
     // Prepare the client
     client := graphql.NewSubscriptionClient(endpoint).
@@ -372,7 +346,6 @@ func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface
         WithTimeout(time.Duration(timeout) * time.Second).
         WithWebSocket(m.newWebsocketConn)
 		
-    log.Printf("DEBUG: Starting subscription with the following parameters:\nSubscription: %+v\nVariables: %+v\nTimeout: %v", subscription, variables, timeout)
 
     // Create a channel to receive responses
     events := make(chan interface{})
@@ -385,11 +358,9 @@ func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface
             return err
         }
 
-        log.Println("DEBUG: Received JSON data: ", string(data)) // add this line
 
-        switch v := subscription.(type) {
+        switch subscription.(type) {
         case *TaskWaitForStatusSubscription:
-			log.Printf("Subscription is of type: %T\n", v)
             var event TaskWaitForStatusSubscription
             err = jsonutil.UnmarshalGraphQL(data, &event)
             if err != nil {
@@ -401,7 +372,6 @@ func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface
 
             // Close the events channel if the task is completed
             for _, task := range event.TaskStream {
-                log.Printf("Received event: %+v", event)
                 if task.Status == "completed" {
                     close(events)
                     cancel()
@@ -409,10 +379,7 @@ func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface
                 }
             }
         case *TaskWaitForOutputSubscription:
-			log.Printf("Subscription is of type: %T\n", v)
             var event TaskWaitForOutputSubscription
-			log.Printf("Received raw data: %s", string(data))
-			log.Printf("Parsed event: %+v", event)
             err = jsonutil.UnmarshalGraphQL(data, &event)
             if err != nil {
                 log.Println("Error parsing GraphQL subscription event:", err)
@@ -526,19 +493,14 @@ func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username
 
 func (mythic *Mythic) AuthenticateToMythic() error {
     url := fmt.Sprintf("%s://%s:%d/auth", mythic.HTTP, mythic.ServerIP, mythic.ServerPort)  
-	log.Printf("[*] URL: %s\n", url) // Add this line
 	data := map[string]interface{}{
 		"username":          mythic.Username,
 		"password":          mythic.Password,
 		"scripting_version": mythic.ScriptingVersion,
 	}
-	log.Printf("[*] Logging into Mythic as scripting_version: %s", mythic.ScriptingVersion)
 	response, err := mythic.HttpPost(url, data)
 	if err != nil {
 		log.Printf("[-] Failed to authenticate to Mythic: \n%s", err)
-		// DEBUG
-		responseBody, _ := json.Marshal(response)
-		log.Printf("HTTP Response from server: %s\n", responseBody)
 		return err
 	}
 
@@ -563,8 +525,6 @@ func (mythic *Mythic) HandleAPITokens() error {
 	}
 
 	if len(query.APITokens) > 0 {
-		//DEBUG 
-		log.Printf("query.APITokens > 0: %v", query.APITokens)
 		tokenValue := query.APITokens[0].TokenValue
 		mythic.APIToken = tokenValue
 	} else {
@@ -629,12 +589,8 @@ func (m *Mythic) CreateNewAPIToken() error {
 		log.Printf("[-] Failed to execute mutation: \n%s", err)
 		return err
 	}
-	
-	//DEBUG
-	log.Printf("[+] Response from server: %#v", response)
 
 	
-
 	if response.CreateAPIToken.Status == "success" {
 		m.APIToken = response.CreateAPIToken.TokenValue
 	} else {

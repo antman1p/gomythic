@@ -213,9 +213,7 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
         return nil, err
     }
 	
-    log.Printf("Received results from GraphQLSubscription: %+v", results) // add this line
 
-    start := time.Now()
     for result := range results {
         // Here we are asserting that the result is of type *TaskWaitForStatusSubscription
         resultAssertion, ok := result.(*TaskWaitForStatusSubscription)
@@ -224,10 +222,6 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
         }
 
         for _, taskFragment := range resultAssertion.TaskStream {
-            elapsed := time.Since(start)
-            log.Printf("Waited for %v", elapsed)
-
-            log.Printf("Received task update: %+v", taskFragment)
 
             if taskFragment.Status.Equals("error") || taskFragment.Status.Equals("completed") {
                 taskResult := &CreateTaskMutation{
