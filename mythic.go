@@ -340,14 +340,30 @@ func (m *Mythic) WaitForTaskOutput(taskDisplayID int, timeout *int) ([]byte, err
                 }
             }
         case <-ctx.Done():
-            return finalOutput, nil // Return what we've collected so far after timeout
+            // Now retrieve all subtask IDs
+            subtaskIds, err := m.GetAllSubtaskIDs(taskDisplayID, true)
+            if err != nil {
+                return nil, fmt.Errorf("failed to get subtask IDs: %v", err)
+            }
+            // Get and aggregate the output of all subtasks
+            for _, subtaskId := range subtaskIds {
+                subtaskOutput, err := m.GetAllTaskOutputByID(subtaskId)
+                if err != nil {
+                    return nil, fmt.Errorf("failed to get subtask output: %v", err)
+                }
+                for _, r := range subtaskOutput {
+                    outputBytes, err := base64.StdEncoding.DecodeString(r.ResponseText)
+                    if err != nil {
+                        return nil, fmt.Errorf("failed to decode base64 response text: %v", err)
+                    }
+                    finalOutput = append(finalOutput, outputBytes...)
+                }
+            }
+            return finalOutput, nil
         }
     }
-
-    // Add handling for subtask output here if needed
-
-    return finalOutput, nil
 }
+
 
 
 
