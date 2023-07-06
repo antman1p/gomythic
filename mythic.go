@@ -15,41 +15,50 @@ import (
 
 )
 
+// Login sets up a new Mythic instance and tries to authenticate with the provided credentials or API token.
 func Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
 	mythic := &Mythic{}
+	
+	// SetMythicDetails initializes the server details for the new instance.
 	mythic.SetMythicDetails(serverIP, serverPort, username, password, apiToken, ssl, timeout)
 
+	// These lines configure the logger to print the filename and line number.
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	
+	// If an API token is not provided, the method tries to authenticate with the provided username and password.
 	if apiToken == "" {
+		// AuthenticateToMythic sends a login request to the server.
 		if err := mythic.AuthenticateToMythic(); err != nil {
 			return nil, err
 		}
-
+		// HandleAPITokens tries to fetch the API token from the server.
 		if err := mythic.HandleAPITokens(); err != nil {
 			return nil, err
 		}
 	} else {
+		// If an API token is provided, it is directly used for authentication.
 		mythic.APIToken = apiToken
 	}
 	return mythic, nil
 }
 
-
+// ExecuteCustomQuery sends a custom GraphQL query to the server and unmarshals the response into result.
 func (m *Mythic) ExecuteCustomQuery(query string, variables map[string]interface{}, result interface{}) error {
-	// Check if the query string is empty
+	// The method first checks if the provided query is not empty.
 	if strings.TrimSpace(query) == "" {
 		return errors.New("query string is empty")
 	}
 
-	// Get the endpoint and http.Client
+	// GetHTTPTransport gets the http.Transport and server URL.
 	transport, serverURL := m.GetHTTPTransport()
 
-	// Create a new client
+	// A new GraphQL client is initialized with the server URL and http.Transport.
 	client := graphql.NewClient(serverURL, &http.Client{Transport: transport})
 
+	// The context for the request is initialized.
 	ctx := context.Background()
 
-	// Execute the query
+	// The query is executed with the provided variables and result.
 	err := client.Exec(ctx, query, result, variables)
 	if err != nil {
 		log.Printf("Hit an exception within ExecuteCustomQuery: %v", err)
@@ -60,15 +69,14 @@ func (m *Mythic) ExecuteCustomQuery(query string, variables map[string]interface
 }
 
 
+// TODO:
 // func (m *Mythic) SubscribeCustomQuery(query string, variables map[string]interface{}, timeout int) error { }
 
 
 
 // # ########### Callback Functions #############
 
-// CallbackAttributes represents the returned data structure of a callback
-type CallbackAttributes map[string]interface{}
-
+// GetAllCallbacks sends a GraphQL query to fetch all callbacks from the server.
 func (m *Mythic) GetAllCallbacks() ([]Callback, error) {
 	var query CallbackQuery
 
@@ -81,9 +89,7 @@ func (m *Mythic) GetAllCallbacks() ([]Callback, error) {
 	return query.Callback, nil
 }
 
-
-
-
+// GetAllActiveCallbacks sends a GraphQL query to fetch all active callbacks from the server.
 func (m *Mythic) GetAllActiveCallbacks() ([]Callback, error) {
 	var query ActiveCallbackQuery
 
@@ -106,10 +112,12 @@ func (m *Mythic) GetAllActiveCallbacks() ([]Callback, error) {
 	integrityLevel int, domain string) ([]Callback, error){}
 */
 
+
 // ############ Task Functions #################
 
-
+// GetAllTasks sends a GraphQL query to fetch all tasks associated with a callback from the server.
 func (m *Mythic) GetAllTasks(callbackDisplayID *int) ([]TaskFragment, error) {
+	// Depending on whether a callback display ID is provided, a different GraphQL query is sent.
 	if callbackDisplayID != nil {
 		var query TaskQueryWithCallback
 		err := m.GraphqlPost(&query, map[string]interface{}{
@@ -129,8 +137,9 @@ func (m *Mythic) GetAllTasks(callbackDisplayID *int) ([]TaskFragment, error) {
 	}
 }
 
-
+// IssueTask sends a task to a callback and optionally waits for it to complete.
 func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackDisplayID int, tokenID *int, originalParams interface{}, parameterGroupName interface{}, waitForComplete bool, timeout *int) (*CreateTaskMutation, error) {
+	// The parameters are first converted to a JSON string.
 	var parameterString string
 	switch parameters := parameters.(type) {
 	case string:
@@ -144,12 +153,14 @@ func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackD
 	default:
 		return nil, fmt.Errorf("parameters must be a string or map[string]interface{}")
 	}
-
+	
+	// Depending on the type of parameters, the tasking location is set.
 	taskingLocation := "command_line"
 	if _, ok := parameters.(map[string]interface{}); ok {
 		taskingLocation = "scripting"
 	}
-
+	
+	// A new task mutation is created and sent to the server.
 	var query CreateTaskMutation
 	
 	variables := map[string]interface{}{
@@ -182,6 +193,7 @@ func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackD
 		return nil, err
 	}
 
+	// If the task is created successfully and the caller requested to wait for it to complete, the method waits for the task to complete.
 	if query.CreateTask.Status.Equals("success") {
 		if waitForComplete {
 			taskDisplayID := query.CreateTask.DisplayID
@@ -201,7 +213,7 @@ func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackD
 	return nil, fmt.Errorf("failed to create task: %s", query.CreateTask.Error)
 }
 
-
+// WaitForTaskComplete subscribes to task updates and waits for the task to complete or fail.
 func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *string, timeout *int) (*CreateTaskMutation, error) {
     var subscription TaskWaitForStatusSubscription
 
@@ -211,6 +223,7 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
 
     variableMap := structToMap(variables)
 
+	// The method subscribes to task updates with a given timeout.
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
 
@@ -220,7 +233,7 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
         return nil, err
     }
 	
-
+	// The method waits for the task to complete or fail and returns the task result.
     for result := range results {
         // Here we are asserting that the result is of type *TaskWaitForStatusSubscription
         resultAssertion, ok := result.(*TaskWaitForStatusSubscription)
@@ -244,7 +257,7 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
                         Error:     "", // this is a placeholder. Please replace this with the actual Error field from your taskFragment if it exists
                     },
                 }
-                
+                // Logging the completion status of the task
                 log.Printf("Task completed with status: %s", taskResult.CreateTask.Status)
                 return taskResult, nil
             }
@@ -255,7 +268,7 @@ func (m *Mythic) WaitForTaskComplete(taskDisplayID int, customReturnAttributes *
 }
 
 
-
+// IssueTaskAndWaitForOutput sends a task to a callback, waits for it to complete, and then retrieves its output.
 func (m *Mythic) IssueTaskAndWaitForOutput(commandName string, parameters interface{}, callbackDisplayId int, tokenId int, originalParams interface{}, parameterGroupName interface{}, waitForComplete bool, timeout int) ([]byte, error) {
 	tokenIdPtr := &tokenId
 	task, err := m.IssueTask(commandName, parameters, callbackDisplayId, tokenIdPtr, originalParams, parameterGroupName, true, &timeout)
@@ -318,41 +331,58 @@ func (m *Mythic) IssueTaskAndWaitForOutput(commandName string, parameters interf
 // # ######### Task Output Functions ###########
 
 
+/* This function is responsible for waiting for the output of a specific task
+   identified by its display ID.
+   The output will be collected and returned as a byte array.
+   A timeout can be provided to stop waiting after a specific duration.
+*/ 
 func (m *Mythic) WaitForTaskOutput(taskDisplayID int, timeout *int) ([]byte, error) {
+	// A subscription object for getting task output
     var subscription TaskWaitForOutputSubscription
 
+	// Variables required for the subscription
     variables := TaskWaitForOutputSubscriptionVariables{
         DisplayID: taskDisplayID,
     }
+	// Convert the variables to a map
     variableMap := structToMap(variables)
-
+	
+	// Create a context with a timeout
     ctx, cancel := context.WithTimeout(context.Background(), time.Second*10) // Set timeout to 10 seconds
     defer cancel() // Make sure to cancel the context when we're done to free resources
-
+	
+	// Subscribe to the task's updates
     events, err := m.GraphQLSubscription(ctx, &subscription, variableMap, *timeout)
     if err != nil {
         log.Printf("Error subscribing to task updates: %v", err)
         return nil, err
     }
-
+	
+	// This will hold the final output
     finalOutput := make([]byte, 0)
 
     for {
         select {
-        case event := <-events:
+		// When a new event is received
+        case event := <-events: 
             v, ok := event.(*TaskWaitForOutputSubscription)
             if !ok {
                 return nil, fmt.Errorf("unexpected type: %T", event)
             }
-            for _, taskStream := range v.TaskStream {
-                for _, response := range taskStream.Responses {
-                    outputBytes, err := base64.StdEncoding.DecodeString(response.ResponseText)
+			// Loop over all task streams in the event
+            for _, taskStream := range v.TaskStream { 
+				// Loop over all responses in the task stream
+                for _, response := range taskStream.Responses { 
+					// Decode the response text from base64
+                    outputBytes, err := base64.StdEncoding.DecodeString(response.ResponseText) 
                     if err != nil {
                         return nil, fmt.Errorf("failed to decode base64 response text: %v", err)
                     }
-                    finalOutput = append(finalOutput, outputBytes...)
+					// Append the output to the final output
+                    finalOutput = append(finalOutput, outputBytes...) 
                 }
             }
+		// When the context is done (timeout)
         case <-ctx.Done():
             // Now retrieve all subtask IDs
             subtaskIds, err := m.GetAllSubtaskIDs(taskDisplayID, true)
@@ -373,12 +403,15 @@ func (m *Mythic) WaitForTaskOutput(taskDisplayID int, timeout *int) ([]byte, err
                     finalOutput = append(finalOutput, outputBytes...)
                 }
             }
+			// Return the final output
             return finalOutput, nil
         }
     }
 }
 
 
+// This function gets all the subtask IDs for a particular task, identified by its DisplayID.
+// If fetchDisplayIDInstead is true, it fetches DisplayIDs instead of normal IDs.
 func (m *Mythic) GetAllSubtaskIDs(taskDisplayID int, fetchDisplayIDInstead bool) ([]int, error) {
 	
 	type TaskIdFromDisplayID struct {
@@ -394,10 +427,12 @@ func (m *Mythic) GetAllSubtaskIDs(taskDisplayID int, fetchDisplayIDInstead bool)
 		} `graphql:"task(where: {parent_task_id: {_eq: $task_id}})"`
 	}
 	
+	// Setting the variables for the GraphQL query
 	variables := map[string]interface{}{
 		"task_id": taskDisplayID,
 	}
 
+	// Initialize the initial struct to get the parent task ID
 	var initial TaskIdFromDisplayID
 	if err := m.GraphqlPost(&initial, variables, "query"); err != nil {
 		return nil, err
@@ -406,20 +441,25 @@ func (m *Mythic) GetAllSubtaskIDs(taskDisplayID int, fetchDisplayIDInstead bool)
 	subtaskIds := []int{}
 	taskIdsToCheck := []int{}
 	if len(initial.Task) > 0 {
+		// Add the parent task ID to the list of task IDs to check
 		taskIdsToCheck = append(taskIdsToCheck, initial.Task[0].ID)
 	}
-
+	
+	// Loop through all task IDs to check
 	for len(taskIdsToCheck) > 0 {
 		currentTaskId := taskIdsToCheck[len(taskIdsToCheck)-1]
 		taskIdsToCheck = taskIdsToCheck[:len(taskIdsToCheck)-1]
-
+		
+		// Update the 'task_id' in variables map
 		variables["task_id"] = currentTaskId  // update the 'task_id' in variables map
 		
+		// Initialize the subtasks struct
 		var subtasks SubtaskList
 		if err := m.GraphqlPost(&subtasks, variables, "query"); err != nil {
 			return nil, err
 		}
-
+		
+		// Add all the subtask IDs or DisplayIDs to the list
 		for _, t := range subtasks.Task {
 			taskIdsToCheck = append(taskIdsToCheck, t.ID)
 			if fetchDisplayIDInstead {
@@ -429,22 +469,25 @@ func (m *Mythic) GetAllSubtaskIDs(taskDisplayID int, fetchDisplayIDInstead bool)
 			}
 		}
 	}
-
+	// Return the list of subtask IDs
 	return subtaskIds, nil
 }
 
-
+// This function retrieves all the output for a specific task, identified by its DisplayID.
 func (m *Mythic) GetAllTaskOutputByID(taskDisplayID int) ([]TaskOutputFragment, error) {
 	var taskOutput TaskOutput
 	
+	// Setting the variables for the GraphQL query
 	variables := map[string]interface{}{
 		"task_display_id": taskDisplayID,
 	}
+	
+	// Execute the GraphQL query and store the result in taskOutput
 	err := m.GraphqlPost(&taskOutput, variables, "query")
 	if err != nil {
 		return nil, err
 	}
-
+	// Return the task output
 	return taskOutput.Response, nil
 }
 

@@ -1,6 +1,10 @@
 package Mythic_Go_Scripting
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"github.com/gorilla/websocket"
+	"time"
+)
 
 type Mythic struct {
 	Username           string `json:"username"`
@@ -17,6 +21,11 @@ type Mythic struct {
 	ScriptingVersion   string `json:"scripting_version"`
 	CurrentOperationID int    `json:"current_operation_id"`
 	Schema             string `json:"schema"`
+}
+
+type MythicWebSocketHandler struct {
+    Conn    *websocket.Conn
+    timeout time.Duration
 }
 
 

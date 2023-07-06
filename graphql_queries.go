@@ -307,6 +307,7 @@ type UpdateCallbackInformationMutation struct {
 }
 
 
+/* TODO:
 var (
 	MythicTreeFragment = `
 		fragment mythictree_fragment on mythictree {
@@ -554,3 +555,4 @@ var (
 		}
 	`
 )
+*/

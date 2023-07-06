@@ -15,12 +15,16 @@ import (
 	"strconv"
 	"context"
 	"reflect"
+	
 	"github.com/hasura/go-graphql-client"
 	"github.com/hasura/go-graphql-client/pkg/jsonutil"
 	"github.com/gorilla/websocket"
 
 )
 
+
+// GetHTTPTransport function sets up the HTTP transport using the defined server configuration in Mythic struct. 
+// It also sets up custom headers for the requests using the GetHeaders function.
 func (m *Mythic) GetHTTPTransport() (http.RoundTripper, string) {
 	url := fmt.Sprintf("%s://%s:%d/graphql/", m.HTTP, m.ServerIP, m.ServerPort)
 
@@ -42,7 +46,7 @@ func (m *Mythic) GetHTTPTransport() (http.RoundTripper, string) {
 	}), url
 }
 
-
+// GraphqlPost function performs a GraphQL query or mutation using the Hasura GraphQL client.
 func (m *Mythic) GraphqlPost(operation interface{}, variables map[string]interface{}, operationType string) error {
 	transport, serverURL := m.GetHTTPTransport()
 
@@ -67,14 +71,16 @@ func (m *Mythic) GraphqlPost(operation interface{}, variables map[string]interfa
 }
 
 
-
-
+// roundTripperFunc is a type definition for a function that acts as a roundTripper in the http client transport.
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
+// RoundTrip function calls the roundTripper function.
 func (fn roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
 }
 
+// HttpPost function sends a POST request to the specified URL with the provided data as JSON. 
+// The request is sent using the HTTP transport set up in the GetHTTPTransport function.
 func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]interface{}, error) {
     jsonData, err := json.Marshal(data)
     if err != nil {
@@ -117,7 +123,7 @@ func (m *Mythic) HttpPost(url string, data map[string]interface{}) (map[string]i
 }
 
 
-
+// GetHeaders function sets up the custom headers for the request based on the provided API token or Access token in the Mythic struct.
 func (m *Mythic) GetHeaders() http.Header {
 	headers := http.Header{}
 	if m.APIToken != "" {
@@ -137,8 +143,8 @@ func HeaderToMap(header http.Header) map[string]interface{} {
 }
 
 
-
-
+// UNTESTED
+// HttpPostForm function sends a POST request to the specified URL with the provided data as form values.
 func (m *Mythic) HttpPostForm(data url.Values, url string) (map[string]interface{}, error) {
 	// Ignore the returned URL using underscore
 	transport, _ := m.GetHTTPTransport()
@@ -175,7 +181,8 @@ func (m *Mythic) HttpPostForm(data url.Values, url string) (map[string]interface
 	return response, nil
 }
 
-
+// UNTESTED
+// HttpGetDictionary function sends a GET request to the specified URL and returns the response as a dictionary.
 func (m *Mythic) HttpGetDictionary(url string) (map[string]interface{}, error) {
 	// Ignore the returned URL using underscore
 	transport, _ := m.GetHTTPTransport()
@@ -211,6 +218,8 @@ func (m *Mythic) HttpGetDictionary(url string) (map[string]interface{}, error) {
 	return response, nil
 }
 
+// UNTESTED
+// HttpGet function sends a GET request to the specified URL and returns the raw response.
 func (m *Mythic) HttpGet(url string) ([]byte, error) {
 	// Ignore the returned URL using underscore
 	transport, _ := m.GetHTTPTransport()
@@ -240,6 +249,8 @@ func (m *Mythic) HttpGet(url string) ([]byte, error) {
 	return responseData, nil
 }
 
+// UNTESTED
+// HttpGetChunked function sends a GET request to the specified URL and returns the response in chunks.
 func (m *Mythic) HttpGetChunked(url string, chunkSize int) (<-chan []byte, error) {
 	// Ignore the returned URL using underscore
 	transport, _ := m.GetHTTPTransport()
@@ -284,7 +295,7 @@ func (m *Mythic) HttpGetChunked(url string, chunkSize int) (<-chan []byte, error
 	return ch, nil
 }
 
-
+// newWebsocketConn function sets up the WebSocket connection for GraphQL subscription.
 func (m *Mythic) newWebsocketConn(sc *graphql.SubscriptionClient) (graphql.WebsocketConn, error) {
     var endpoint = "/graphql/"
 	
@@ -300,34 +311,35 @@ func (m *Mythic) newWebsocketConn(sc *graphql.SubscriptionClient) (graphql.Webso
     }, nil
 }
 
-type MythicWebSocketHandler struct {
-    Conn    *websocket.Conn
-    timeout time.Duration
-}
 
+// ReadJSON function reads JSON data from the WebSocket connection.
 func (h *MythicWebSocketHandler) ReadJSON(v interface{}) error {
     return h.Conn.ReadJSON(v)
 }
 
+// WriteJSON function writes JSON data to the WebSocket connection.
 func (h *MythicWebSocketHandler) WriteJSON(v interface{}) error {
     return h.Conn.WriteJSON(v)
 }
 
+// Close function closes the WebSocket connection.
 func (h *MythicWebSocketHandler) Close() error {
     return h.Conn.Close()
 }
 
+// SetReadLimit function sets the read limit for the WebSocket connection.
 func (h *MythicWebSocketHandler) SetReadLimit(limit int64) {
     h.Conn.SetReadLimit(limit)
 }
 
+// GetCloseStatus function gets the close status of the WebSocket connection.
 func (h *MythicWebSocketHandler) GetCloseStatus(err error) int32 {
     // You can modify this to return the actual close status if possible
     return 1000  // Normal closure status
 }
 
 
-
+// GraphQLSubscription function sets up the GraphQL subscription using the provided parameters.
 func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface{}, variables map[string]interface{}, timeout int) (<-chan interface{}, error) {
     var endpoint = "/graphql/"
 
@@ -338,7 +350,6 @@ func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface
             headersMap[key] = values[0]
         }
     }
-	
 
     // Prepare the client
     client := graphql.NewSubscriptionClient(endpoint).
@@ -426,14 +437,8 @@ func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface
 
 }
 
-
-
-
-
-
-
-
-
+// UNTESTED
+// FetchGraphQLSchema function sends an HTTP GET request to the Mythic server to retrieve the GraphQL schema and returns it as a string.
 func (m *Mythic) FetchGraphQLSchema() (string, error) {
 	response, err := m.HttpGet(m.HTTP + m.ServerIP + ":" + strconv.Itoa(m.ServerPort) + "/graphql/schema.json")
 	if err != nil {
@@ -442,6 +447,8 @@ func (m *Mythic) FetchGraphQLSchema() (string, error) {
 	return string(response), nil
 }
 
+//UNTESTED
+// LoadMythicSchema function fetches the GraphQL schema from the Mythic server and stores it in the Mythic struct.
 func (m *Mythic) LoadMythicSchema() bool {
 	schema, err := m.FetchGraphQLSchema()
 	if err != nil {
@@ -453,6 +460,7 @@ func (m *Mythic) LoadMythicSchema() bool {
 	return true
 }
 
+// SetMythicDetails function sets up the Mythic struct with the provided server details and returns a new GraphQL client.
 func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout int) *graphql.Client {
 	mythic.Username = username
 	mythic.Password = password
@@ -489,8 +497,7 @@ func (mythic *Mythic) SetMythicDetails(serverIP string, serverPort int, username
 	return client
 }
 
-
-
+// AuthenticateToMythic function sends a POST request to authenticate to the Mythic server with the provided username and password.
 func (mythic *Mythic) AuthenticateToMythic() error {
     url := fmt.Sprintf("%s://%s:%d/auth", mythic.HTTP, mythic.ServerIP, mythic.ServerPort)  
 	data := map[string]interface{}{
@@ -512,6 +519,7 @@ func (mythic *Mythic) AuthenticateToMythic() error {
 	return nil
 }
 
+// HandleAPITokens function fetches the API tokens associated with the user from the Mythic server using a GraphQL query.
 func (mythic *Mythic) HandleAPITokens() error {
 	log.Printf("Sending GraphqlPost request...\n") 
 
@@ -539,40 +547,7 @@ func (mythic *Mythic) HandleAPITokens() error {
 }
 
 
-
-
-
-
-
-func (mythic *Mythic) HandleAPITokenMap(data map[string]interface{}) error {
-	apitokens, ok := data["apitokens"].([]interface{})
-	if !ok {
-		// Handle the error
-		log.Fatal("apitokens is not a []interface{}")
-		return fmt.Errorf("apitokens is not a []interface{}")
-	}
-	if len(apitokens) > 0 {
-		return mythic.HandleExistingAPIToken(apitokens)
-	} else {
-		// If there are no current tokens, create a new one
-		return mythic.CreateNewAPIToken()
-	}
-}
-
-func (mythic *Mythic) HandleExistingAPIToken(apitokens []interface{}) error {
-	tokenMap, ok := apitokens[0].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("apitoken is not a map[string]interface{}")
-	}
-	tokenValue, ok := tokenMap["token_value"].(string)
-	if !ok {
-		return fmt.Errorf("token_value is not a string")
-	}
-	mythic.APIToken = tokenValue
-
-	return nil
-}
-
+// CreateNewAPIToken function sends a GraphQL mutation to the Mythic server to create a new API token.
 func (m *Mythic) CreateNewAPIToken() error {
 
 	variables := CreateAPITokenVariables{
@@ -603,10 +578,7 @@ func (m *Mythic) CreateNewAPIToken() error {
 	return nil
 }
 
-
-
-
-
+// getWebSocketTransport function sets up a WebSocket connection to the Mythic server with the specified path.
 func (m *Mythic) getWebSocketTransport(path string) (*websocket.Conn, error) {
     u := url.URL{Scheme: "wss", Host: fmt.Sprintf("%s:%d", m.ServerIP, m.ServerPort), Path: path}
 
@@ -630,12 +602,7 @@ func (m *Mythic) getWebSocketTransport(path string) (*websocket.Conn, error) {
     return c, nil
 }
 
-
-
-
-
-
-
+// structToMap function converts a struct to a map.
 func structToMap(obj interface{}) map[string]interface{} {
     out := make(map[string]interface{})
     v := reflect.ValueOf(obj)
