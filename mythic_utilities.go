@@ -622,4 +622,50 @@ func structToMap(obj interface{}) map[string]interface{} {
 }
 
 
+func FilterResponse(data []interface{}, fields []string) ([]map[string]interface{}, error) {
+    filtered := []map[string]interface{}{}
+
+    for _, item := range data {
+        entry := make(map[string]interface{})
+        itm := structToMap(item) // Convert struct to map
+        for _, field := range fields {
+            if val, ok := itm[field]; ok {
+                entry[field] = val
+            }
+        }
+        filtered = append(filtered, entry)
+    }
+
+    return filtered, nil
+}
+
+// Convert []Callback to []interface{}
+func CallbacksToInterfaces(callbacks []Callback) []interface{} {
+    res := make([]interface{}, len(callbacks))
+    for i, v := range callbacks {
+        res[i] = v
+    }
+    return res
+}
+
+// Convert []TaskFragment to []interface{}
+func TasksToInterfaces(tasks []TaskFragment) []interface{} {
+    res := make([]interface{}, len(tasks))
+    for i, v := range tasks {
+        res[i] = v
+    }
+    return res
+}
+
+func TaskFragmentsToInterfaces(taskFragments []TaskFragment) []interface{} {
+    result := make([]interface{}, len(taskFragments))
+    for i, v := range taskFragments {
+        result[i] = v
+    }
+    return result
+}
+
+
+
+
 

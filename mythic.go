@@ -77,7 +77,7 @@ func (m *Mythic) ExecuteCustomQuery(query string, variables map[string]interface
 // # ########### Callback Functions #############
 
 // GetAllCallbacks sends a GraphQL query to fetch all callbacks from the server.
-func (m *Mythic) GetAllCallbacks() ([]Callback, error) {
+func (m *Mythic) GetAllCallbacks(customReturnAttributes []string) ([]map[string]interface{}, error) {
 	var query CallbackQuery
 
 	err := m.GraphqlPost(&query, nil, "query")
@@ -86,11 +86,30 @@ func (m *Mythic) GetAllCallbacks() ([]Callback, error) {
 		return nil, err
 	}
 
-	return query.Callback, nil
+	// If customReturnAttributes is not nil, filter the response.
+	if customReturnAttributes != nil {
+		filteredCallbacks, err := FilterResponse(CallbacksToInterfaces(query.Callback), customReturnAttributes)		
+		if err != nil {
+			return nil, err
+		}
+		return filteredCallbacks, nil
+	}
+	
+	// Else, convert the Callbacks to map[string]interface{} and return.
+	callbacksMap := make([]map[string]interface{}, len(query.Callback))
+	for i, callback := range query.Callback {
+		jsonCb, _ := json.Marshal(callback)
+		cbMap := make(map[string]interface{})
+		json.Unmarshal(jsonCb, &cbMap)
+		callbacksMap[i] = cbMap
+	}
+	
+	return callbacksMap, nil
 }
 
+
 // GetAllActiveCallbacks sends a GraphQL query to fetch all active callbacks from the server.
-func (m *Mythic) GetAllActiveCallbacks() ([]Callback, error) {
+func (m *Mythic) GetAllActiveCallbacks(customReturnAttributes []string) ([]map[string]interface{}, error) {
 	var query ActiveCallbackQuery
 
 	err := m.GraphqlPost(&query, nil, "query")
@@ -98,9 +117,28 @@ func (m *Mythic) GetAllActiveCallbacks() ([]Callback, error) {
 	if err != nil {
 		return nil, err
 	}
+	
+	// If customReturnAttributes is not nil, filter the response.
+	if customReturnAttributes != nil {
+	filteredCallbacks, err := FilterResponse(CallbacksToInterfaces(query.Callback), customReturnAttributes)
+	if err != nil {
+		return nil, err
+	}
+		return filteredCallbacks, nil
+	}
 
-	return query.Callback, nil
+	// Convert the Callbacks to map[string]interface{} and return.
+	callbacksMap := make([]map[string]interface{}, len(query.Callback))
+	for i, callback := range query.Callback {
+		jsonCb, _ := json.Marshal(callback)
+		cbMap := make(map[string]interface{})
+		json.Unmarshal(jsonCb, &cbMap)
+		callbacksMap[i] = cbMap
+	}
+
+	return callbacksMap, nil
 }
+
 
 //TODO:
 // func (m *Mythic) SubscribeNewCallbacks(batchSize int, timeout int) ([]Callback, error){}
@@ -116,26 +154,65 @@ func (m *Mythic) GetAllActiveCallbacks() ([]Callback, error) {
 // ############ Task Functions #################
 
 // GetAllTasks sends a GraphQL query to fetch all tasks associated with a callback from the server.
-func (m *Mythic) GetAllTasks(callbackDisplayID *int) ([]TaskFragment, error) {
-	// Depending on whether a callback display ID is provided, a different GraphQL query is sent.
-	if callbackDisplayID != nil {
-		var query TaskQueryWithCallback
-		err := m.GraphqlPost(&query, map[string]interface{}{
-			"callbackDisplayID": *callbackDisplayID,
-		}, "query")
-		if err != nil {
-			return nil, err
-		}
-		return query.Task, nil
-	} else {
-		var query TaskQuery
-		err := m.GraphqlPost(&query, nil, "query")
-		if err != nil {
-			return nil, err
-		}
-		return query.Task, nil
-	}
+func (m *Mythic) GetAllTasks(callbackDisplayID *int, customReturnAttributes []string) ([]map[string]interface{}, error) {
+    // Depending on whether a callback display ID is provided, a different GraphQL query is sent.
+    if callbackDisplayID != nil {
+        var query TaskQueryWithCallback
+        err := m.GraphqlPost(&query, map[string]interface{}{
+            "callbackDisplayID": *callbackDisplayID,
+        }, "query")
+        if err != nil {
+            return nil, err
+        }
+
+        // If customReturnAttributes is not nil, filter the response.
+        if customReturnAttributes != nil {
+            filteredTasks, err := FilterResponse(TaskFragmentsToInterfaces(query.Task), customReturnAttributes)
+            if err != nil {
+                return nil, err
+            }
+            return filteredTasks, nil
+        }
+
+        // Else, convert the Tasks to map[string]interface{} and return.
+        tasksMap := make([]map[string]interface{}, len(query.Task))
+        for i, task := range query.Task {
+            jsonTask, _ := json.Marshal(task)
+            taskMap := make(map[string]interface{})
+            json.Unmarshal(jsonTask, &taskMap)
+            tasksMap[i] = taskMap
+        }
+        
+        return tasksMap, nil
+    } else {
+        var query TaskQuery
+        err := m.GraphqlPost(&query, nil, "query")
+        if err != nil {
+            return nil, err
+        }
+
+        // If customReturnAttributes is not nil, filter the response.
+        if customReturnAttributes != nil {
+            filteredTasks, err := FilterResponse(TaskFragmentsToInterfaces(query.Task), customReturnAttributes)
+            if err != nil {
+                return nil, err
+            }
+            return filteredTasks, nil
+        }
+
+        // Else, convert the Tasks to map[string]interface{} and return.
+        tasksMap := make([]map[string]interface{}, len(query.Task))
+        for i, task := range query.Task {
+            jsonTask, _ := json.Marshal(task)
+            taskMap := make(map[string]interface{})
+            json.Unmarshal(jsonTask, &taskMap)
+            tasksMap[i] = taskMap
+        }
+        
+        return tasksMap, nil
+    }
 }
+
 
 // IssueTask sends a task to a callback and optionally waits for it to complete.
 func (m *Mythic) IssueTask(commandName string, parameters interface{}, callbackDisplayID int, tokenID *int, originalParams interface{}, parameterGroupName interface{}, waitForComplete bool, timeout *int) (*CreateTaskMutation, error) {
