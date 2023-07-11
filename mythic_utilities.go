@@ -440,7 +440,7 @@ func (m *Mythic) GraphQLSubscription(ctx context.Context, subscription interface
 // UNTESTED
 // FetchGraphQLSchema function sends an HTTP GET request to the Mythic server to retrieve the GraphQL schema and returns it as a string.
 func (m *Mythic) FetchGraphQLSchema() (string, error) {
-	response, err := m.HttpGet(m.HTTP + m.ServerIP + ":" + strconv.Itoa(m.ServerPort) + "/graphql/schema.json")
+	response, err := m.HttpGet(m.HTTP + "://" + m.ServerIP + ":" + strconv.Itoa(m.ServerPort) + "/graphql/schema.json")
 	if err != nil {
 		return "", err
 	}
@@ -536,7 +536,7 @@ func (mythic *Mythic) HandleAPITokens() error {
 		tokenValue := query.APITokens[0].TokenValue
 		mythic.APIToken = tokenValue
 	} else {
-		err := mythic.CreateNewAPIToken()
+		err := mythic.CreateAPIToken()
 		if err != nil {
 			log.Fatal("Failed to create a new API token: ", err)
 			return err
@@ -547,36 +547,7 @@ func (mythic *Mythic) HandleAPITokens() error {
 }
 
 
-// CreateNewAPIToken function sends a GraphQL mutation to the Mythic server to create a new API token.
-func (m *Mythic) CreateNewAPIToken() error {
 
-	variables := CreateAPITokenVariables{
-		TokenType: "User",
-	}
-	
-	variableMap := map[string]interface{}{
-		"token_type": variables.TokenType,
-	}
-	
-	var response CreateAPITokenMutation
-	err := m.GraphqlPost(&response, variableMap, "mutation")
-	if err != nil {
-		log.Printf("[-] Failed to execute mutation: \n%s", err)
-		return err
-	}
-
-	
-	if response.CreateAPIToken.Status == "success" {
-		m.APIToken = response.CreateAPIToken.TokenValue
-	} else {
-		errMsg := response.CreateAPIToken.Error
-		err := fmt.Errorf("Failed to get or generate an API token to use from Mythic\n%s", errMsg)
-		log.Printf("[-] Failed to authenticate to Mythic: \n%s", err)
-		return err
-	}
-
-	return nil
-}
 
 // getWebSocketTransport function sets up a WebSocket connection to the Mythic server with the specified path.
 func (m *Mythic) getWebSocketTransport(path string) (*websocket.Conn, error) {
@@ -622,22 +593,33 @@ func structToMap(obj interface{}) map[string]interface{} {
 }
 
 
-func FilterResponse(data []interface{}, fields []string) ([]map[string]interface{}, error) {
-    filtered := []map[string]interface{}{}
+// FilterResponse filters the response according to the provided attributes.
+func FilterResponse(response []interface{}, attributes []string) ([]map[string]interface{}, error) {
+    filteredResponse := make([]map[string]interface{}, len(response))
 
-    for _, item := range data {
-        entry := make(map[string]interface{})
-        itm := structToMap(item) // Convert struct to map
-        for _, field := range fields {
-            if val, ok := itm[field]; ok {
-                entry[field] = val
+    for i, item := range response {
+        var mapItem map[string]interface{}
+
+        // Check if the item is already a map, if not convert it.
+        switch item := item.(type) {
+        case map[string]interface{}:
+            mapItem = item
+        default:
+            mapItem = structToMap(item)
+        }
+
+        filteredMap := make(map[string]interface{})
+        for _, attr := range attributes {
+            if val, ok := mapItem[attr]; ok {
+                filteredMap[attr] = val
             }
         }
-        filtered = append(filtered, entry)
+        filteredResponse[i] = filteredMap
     }
 
-    return filtered, nil
+    return filteredResponse, nil
 }
+
 
 // Convert []Callback to []interface{}
 func CallbacksToInterfaces(callbacks []Callback) []interface{} {

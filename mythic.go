@@ -141,9 +141,9 @@ func (m *Mythic) GetAllActiveCallbacks(customReturnAttributes []string) ([]map[s
 
 
 //TODO:
-// func (m *Mythic) SubscribeNewCallbacks(batchSize int, timeout int) ([]Callback, error){}
+// func (m *Mythic) SubscribeNewCallbacks(batchSize int, timeout int, customReturnAttributes []string)) ([]Callback, error){}
 
-// func (m *Mythic) SubscribeAllActiveCallbacks(timeout int) ([]Callback, error){}
+// func (m *Mythic) SubscribeAllActiveCallbacks(timeout int, customReturnAttributes []string)) ([]Callback, error){}
 
 /* func (m *Mythic) UpdateCallback(callbackDisplayID *int, active bool, sleepInfo string, locaked bool, description string,
 	ips []string, user string, host string, os string, architecture string, extraInfo string, pid int, processName string,
@@ -366,13 +366,13 @@ func (m *Mythic) IssueTaskAndWaitForOutput(commandName string, parameters interf
 
 // func (m *Mythic) IssueTaskAllActiveCallbacks(commandName string, parameters interface{}) ([]byte, error) {}
 
-// func (m *Mythic) SubscribeNewTasks(batchSize int, timeout int, callbackDisplayId int) ([]byte, error) {}
+// func (m *Mythic) SubscribeNewTasks(batchSize int, timeout int, callbackDisplayId int, customReturnAttributes []string)) ([]byte, error) {}
 
-// func (m *Mythic) SubscribeNewTasksAndUpdates(batchSize int, timeout int, callbackDisplayId int) ([]byte, error) {}
+// func (m *Mythic) SubscribeNewTasksAndUpdates(batchSize int, timeout int, callbackDisplayId int, customReturnAttributes []string)) ([]byte, error) {}
 
-// func (m *Mythic) SubscribeAllTasks(timeout int, callbackDisplayId int) ([]byte, error) {}
+// func (m *Mythic) SubscribeAllTasks(timeout int, callbackDisplayId int, customReturnAttributes []string)) ([]byte, error) {}
 
-// func (m *Mythic) SubscribeAllTasksAndUpdates(timeout int, callbackDisplayId int) ([]byte, error) {}
+// func (m *Mythic) SubscribeAllTasksAndUpdates(timeout int, callbackDisplayId int, customReturnAttributes []string)) ([]byte, error) {}
 
 // func (m *Mythic) AddMitreAttackToTask(timeout int, taskDisplayID int, MitreAttackNumbers []string ) ([]byte, error) {}
 
@@ -382,27 +382,43 @@ func (m *Mythic) IssueTaskAndWaitForOutput(commandName string, parameters interf
 
 // # ######### File Browser Functions ###########
 
-//func (m *Mythic) GetAllFileBrowser(host string, batchSize int) ([]byte, error) {}
+//func (m *Mythic) GetAllFileBrowser(host string, batchSize int, customReturnAttributes []string)) ([]byte, error) {}
 
-//func (m *Mythic) SubscribeNewFileBrowser(host string, batchSize int, timeout int) ([]byte, error) {}
+//func (m *Mythic) SubscribeNewFileBrowser(host string, batchSize int, timeout int, customReturnAttributes []string)) ([]byte, error) {}
 
-//func (m *Mythic) SubscribeAllFileBrowser(host string, timeout int, batchSize int) ([]byte, error) {}
+//func (m *Mythic) SubscribeAllFileBrowser(host string, timeout int, batchSize int, customReturnAttributes []string)) ([]byte, error) {}
 
 
 
 
 // # ######### Command Functions ##############
 
-// func (m *Mythic) GetAllCommandsForPayloadType(payloadTypeName string) ([]byte, error) {}
+// func (m *Mythic) GetAllCommandsForPayloadType(payloadTypeName string, customReturnAttributes []string)) ([]byte, error) {}
 
 
 
 // # ######### Payload Functions ##############
 
 /* func (m *Mythic) CreatePayload(payloadTypeName string, filename string, operatingSystem string, c2Profiles interface{}, commands []string, 
-	buildParameters interface{}, description string, returnOnComplete bool, timeout int, includeAllCommands bool) ([]byte, error) {}
-
+	buildParameters interface{}, description string, returnOnComplete bool, timeout int, customReturnAttributes []string), includeAllCommands bool) ([]byte, error) {}
 */
+
+/*
+func (m *Mythic) CreateWrapperPayload(payloadTypeName string, filename string, operatingSystem string, wrappedPayloadUUID string,
+	buildParameters interface{}, description string, returnOnComplete bool, timeout int, customReturnAttributes []string) ([]byte, error) {}
+*/
+
+// func (m *Mythic) WaitForPayloadComplete(payloadUUID string, timeout int, customReturnAttributes []string) ([]byte, error) {}
+
+// func (m *Mythic) GetAllPayloads(customReturnAttributes []string) ([]byte, error) {}
+
+// func (m *Mythic) GetPayloadByUUID(payloadUUID string, customReturnAttributes []string) ([]byte, error) {}
+
+// func (m *Mythic) DownloadPayload(payloadUUID string) ([]byte, error) {}
+
+// func (m *Mythic) PayloadCheckConfig(payloadUUID string) ([]byte, error) {}
+
+// func (m *Mythic) PayloadRedirectRules(payloadUUID string) ([]byte, error) {}
 
 
 // # ######### Task Output Functions ###########
@@ -571,23 +587,133 @@ func (m *Mythic) GetAllTaskOutputByID(taskDisplayID int) ([]TaskOutputFragment, 
 
 // TODO:
 
+// func (m *Mythic) GetAllTaskOutput(customReturnAttributes []string, batchSize int) ([]byte, error) {}
+
+// func (m *Mythic) GetAllTaskandSubTaskOutputByID(taskDisplayID int, customReturnAttributes []string) ([]byte, error) {}
+
+// func (m *Mythic) SubacribeNewTaskOutput(timeout int, customReturnAttributes []string, batchSize int) ([]byte, error) {}
+
+// func (m *Mythic) SubacribeAllTaskOutput(timeout int, customReturnAttributes []string, batchSize int) ([]byte, error) {}
+
+
+
+// TODO:
+
 // # ########## Operator Functions ##############
+
+// func (m *Mythic) CreateOperator(username string, password string) ([]byte, error) {}
+
+
+// CreateAPIToken function sends a GraphQL mutation to the Mythic server to create a new API token.
+func (m *Mythic) CreateAPIToken() error {
+
+	variables := CreateAPITokenVariables{
+		TokenType: "User",
+	}
+	
+	variableMap := map[string]interface{}{
+		"token_type": variables.TokenType,
+	}
+	
+	var response CreateAPITokenMutation
+	err := m.GraphqlPost(&response, variableMap, "mutation")
+	if err != nil {
+		log.Printf("[-] Failed to execute mutation: \n%s", err)
+		return err
+	}
+
+	
+	if response.CreateAPIToken.Status == "success" {
+		m.APIToken = response.CreateAPIToken.TokenValue
+	} else {
+		errMsg := response.CreateAPIToken.Error
+		err := fmt.Errorf("Failed to get or generate an API token to use from Mythic\n%s", errMsg)
+		log.Printf("[-] Failed to authenticate to Mythic: \n%s", err)
+		return err
+	}
+
+	return nil
+}
+
+
+// TODO:
+
+// func (m *Mythic) SetAdminStatus() ([]byte, error) {}
+
+// func (m *Mythic) SetActiveStatus(username string, active bool) ([]byte, error) {}
+
+// func (m *Mythic) SetPassword(username string, oldPassword string, newPassword string) ([]byte, error) {}
+
+// func (m *Mythic) GetOperator(username string, customReturnAttributes []string) ([]byte, error) {}
+
+// func (m *Mythic) getMe() ([]byte, error) {}
+
+
 
 // # ########## File Functions ##############
 
+// func (m *Mythic) RegisterFile() ([]byte, error) {}
+// func (m *Mythic) DownloadFile() ([]byte, error) {}
+// func (m *Mythic) DownloadFileChunked() ([]byte, error) {}
+// func (m *Mythic) GetAllDownloadedFiles() ([]byte, error) {}
+// func (m *Mythic) SubscribeNewDownloadedFiles() ([]byte, error) {}
+// func (m *Mythic) SubscribeAllDownloadedFiles() ([]byte, error) {}
+// func (m *Mythic) GetAllScreenshots() ([]byte, error) {}
+// func (m *Mythic) GetAllUploadedFiles() ([]byte, error) {}
+// func (m *Mythic) GetLatestUploadedFileByName() ([]byte, error) {}
+
+
 // # ########## Operations Functions #############
+
+// func (m *Mythic) GetOperations() ([]byte, error) {}
+// func (m *Mythic) CreateOperation() ([]byte, error) {}
+// func (m *Mythic) AddOperatorToOperation() ([]byte, error) {}
+// func (m *Mythic) RemoveOperatorFromOperation() ([]byte, error) {}
+// func (m *Mythic) UpdateOperatorInOperation() ([]byte, error) {}
+// func (m *Mythic) UpdateOperation() ([]byte, error) {}
+// func (m *Mythic) UpdateCurrentOperationForUser() ([]byte, error) {}
+
 
 // # ############ Process Functions ##############
 
+// func (m *Mythic) SubscribeNewProcess() ([]byte, error) {}
+// func (m *Mythic) GetAllProcesses() ([]byte, error) {}
+// func (m *Mythic) SubscribeAllProcesses() ([]byte, error) {}
+
+
+// # ####### Credential Functions ############
+
+// func (m *Mythic) CreateCredential() ([]byte, error) {}
+
+
 // # ####### Analytic-based Functions ############
+
+// func (m *Mythic) GetUniqueCompromisedHosts() ([]byte, error) {}
+// func (m *Mythic) GetUniqueCompromisedAccounts() ([]byte, error) {}
+// func (m *Mythic) GetUniqueCompromisedIPs() ([]byte, error) {}
+
 
 // # ####### Event Feed functions ############
 
+// func (m *Mythic) SendEventLogMessage() ([]byte, error) {}
+
 // # ####### webhook ############
+
+// func (m *Mythic) SendCustomWebHookMessage() ([]byte, error) {}
 
 // # ####### C2 Functions #############
 
+// func (m *Mythic) StartStopC2Profiles() ([]byte, error) {}
+// func (m *Mythic) CreateSavedC2Instance() ([]byte, error) {}
+
 // # ####### Tag Functions ############
+
+// func (m *Mythic) CreateTagTypes() ([]byte, error) {}
+// func (m *Mythic) UpdateTagTypes() ([]byte, error) {}
+// func (m *Mythic) DeleteTagTypes() ([]byte, error) {}
+// func (m *Mythic) GetTagTypes() ([]byte, error) {}
+// func (m *Mythic) GetAllTagTypes() ([]byte, error) {}
+
 
 
 
