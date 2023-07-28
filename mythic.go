@@ -1,4 +1,4 @@
-package Mythic_Go_Scripting
+package gomythic
 
 import (
 	"log"
