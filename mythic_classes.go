@@ -99,3 +99,24 @@ func (s MythicStatus) GreaterThanOrEqual(obj interface{}) bool {
 	}
 	return enumMapping[selfObj] >= enumMapping[targetObj]
 }
+
+
+type MythicManager struct {
+    instance *Mythic
+}
+
+func NewMythicManager() *MythicManager {
+    return &MythicManager{}
+}
+
+func (mm *MythicManager) GetMythicInstance() *Mythic {
+    if mm.instance == nil {
+        mm.instance = &Mythic{} // create a new instance here
+    }
+    return mm.instance
+}
+
+func (mm *MythicManager) InvalidateMythicInstance() {
+    mm.instance = nil // set the instance to nil
+}
+

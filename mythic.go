@@ -17,7 +17,17 @@ import (
 
 // Login sets up a new Mythic instance and tries to authenticate with the provided credentials or API token.
 func Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
-	mythic := &Mythic{}
+
+	mythicManager := NewMythicManager()
+	
+	// Invalidate any old Mythic instance
+    mythicManager.InvalidateMythicInstance()
+	if mythic == nil {
+		log.Printf("Mythic Instance Invalidated.")
+	}
+	
+	 // Get a new Mythic instance from the manager
+    mythic := mythicManager.GetMythicInstance()
 	
 	// SetMythicDetails initializes the server details for the new instance.
 	mythic.SetMythicDetails(serverIP, serverPort, username, password, apiToken, ssl, timeout)
