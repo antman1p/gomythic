@@ -16,9 +16,7 @@ import (
 )
 
 // Login sets up a new Mythic instance and tries to authenticate with the provided credentials or API token.
-func Login(serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
-
-	mythicManager := NewMythicManager()
+func Login(mythicManager *MythicManager, serverIP string, serverPort int, username, password, apiToken string, ssl bool, timeout, loggingLevel int) (*Mythic, error) {
 	
 	// Invalidate any old Mythic instance
     mythicManager.InvalidateMythicInstance()
