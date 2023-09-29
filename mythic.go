@@ -22,9 +22,6 @@ func Login(serverIP string, serverPort int, username, password, apiToken string,
 	
 	// Invalidate any old Mythic instance
     mythicManager.InvalidateMythicInstance()
-	if mythic == nil {
-		log.Printf("Mythic Instance Invalidated.")
-	}
 	
 	 // Get a new Mythic instance from the manager
     mythic := mythicManager.GetMythicInstance()
